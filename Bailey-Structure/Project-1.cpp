@@ -108,7 +108,7 @@ enum ButtonVals
 
 // window background color (rgba):
 
-const GLfloat BACKCOLOR[ ] = { 0., 0., 0., 1. };
+const GLfloat BACKCOLOR[ ] = { 0, 0, 0, 1. };
 
 
 // line width for the axes:
@@ -347,7 +347,7 @@ Display( )
 
 	// set the eye position, look-at position, and up-vector:
 
-	gluLookAt( 0., 0., 3.,     0., 0., 0.,     0., 1., 0. );
+	gluLookAt( BOXSIZE, BOXSIZE, BOXSIZE,     0., 0., 0.,     0., 1., 0. );
 
 
 	// rotate the scene:
@@ -449,8 +449,11 @@ Display( )
 	gluOrtho2D( 0., 100.,     0., 100. );
 	glMatrixMode( GL_MODELVIEW );
 	glLoadIdentity( );
-	glColor3f( 1., 1., 1. );
-	DoRasterString( 5., 5., 0., "Gamecube Logo" );
+	glColor3f( 0., 1., 0. );
+	DoRasterString( 5., 10., 0., "Gamecube Logo" );
+	glColor3f(1., 0., 0.);
+	DoRasterString(5., 5., 0., "Jonathan Jones");
+
 
 
 	// swap the double-buffered framebuffers:
@@ -1016,14 +1019,14 @@ void
 Reset( )
 {
 	ActiveButton = 0;
-	AxesOn = 1;
+	AxesOn = 0;
 	DebugOn = 0;
 	DepthBufferOn = 1;
 	DepthFightingOn = 0;
 	DepthCueOn = 0;
 	Scale  = 1.0;
 	WhichColor = WHITE;
-	WhichProjection = PERSP;
+	WhichProjection = ORTHO;
 	Xrot = Yrot = 0.;
 }
 
