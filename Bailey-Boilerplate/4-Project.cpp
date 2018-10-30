@@ -372,49 +372,22 @@ Display( )
 
 	glRotatef(Time * 360.0f, 0.f, 1.f, 0.f);
 
-	//Draw teapot with texture mapped onto it
-	glEnable(GL_TEXTURE_2D);
-	glBindTexture(GL_TEXTURE_2D, texture);
-
+	//Draw teapot with texture mapped onto it	
 	glPushMatrix();
 	glTranslatef(0.f, 0.f, -3.f);
 	glRotatef(Time * 360.f, 0.f, 1.f, 0.f);
-	glColor3f(.75f, .75f, 1.0f);
-	glutSolidTeapot(1.2);
+	glCallList(Teapot);
 	glPopMatrix();
-
-	glDisable(GL_TEXTURE_2D);
 	
-	//Cone
-	glPushMatrix();
-	glTranslatef(3.f, -1.f, 0.f);
-	glRotatef(-90.f, 1.f, 0.f, 0.f);
-	glColor3f(1.f, 0.f, 0.f);
-	glutSolidCone(1.0, 2.0, 10, 10);
-	glPopMatrix();
+	glCallList(Cone); //Draw cone
 
-	//Sphere
-	glPushMatrix();
-	glTranslatef(0.f, 0.f, 3.f);
-	glColor3f(0.f, 1.f, 0.f);
-	glutSolidSphere(1.0, 10, 10);
-	glPopMatrix();
+	glCallList(Sphere); //Draw sphere
 
-	//Cube
-	glPushMatrix();
-	glTranslatef(-3.f, 0.f, 0.f);
-	glColor3f(0.f, 0.f, 1.f);
-	glutSolidCube(1.5);
-	glPopMatrix();
+	glCallList(Cube); //Draw cube
 
 	glPopMatrix();
 
-	//Torus
-	glPushMatrix();
-	glTranslatef(0.f, 0.f, -5.5f);
-	glColor3f(.5f, .5f, .5f);
-	glutSolidTorus(0.5, 1.5, 100, 100);
-	glPopMatrix();
+	glCallList(Torus); //Draw torus
 
 	if( AxesOn != 0 )
 	{
@@ -762,8 +735,60 @@ InitTextures()
 void
 InitLists( )
 {
-	// create the axes:
+	//Teapot
+	Teapot = glGenLists(1);
+	glNewList(Teapot, GL_COMPILE);
+	glPushMatrix();
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glColor3f(.75f, .75f, 1.0f);
+	glutSolidTeapot(1.2);
+	glDisable(GL_TEXTURE_2D);
+	glPopMatrix();
+	glEndList();
 
+	//Cone
+	Cone = glGenLists(1);
+	glNewList(Cone, GL_COMPILE);
+	glPushMatrix();
+	glTranslatef(3.f, -1.f, 0.f);
+	glRotatef(-90.f, 1.f, 0.f, 0.f);
+	glColor3f(1.f, 0.f, 0.f);
+	glutSolidCone(1.0, 2.0, 10, 10);
+	glPopMatrix();
+	glEndList();
+
+	//Sphere
+	Sphere = glGenLists(1);
+	glNewList(Sphere, GL_COMPILE);
+	glPushMatrix();
+	glTranslatef(0.f, 0.f, 3.f);
+	glColor3f(0.f, 1.f, 0.f);
+	glutSolidSphere(1.0, 10, 10);
+	glPopMatrix();
+	glEndList();
+
+	//Cube
+	Cube = glGenLists(1);
+	glNewList(Cube, GL_COMPILE);
+	glPushMatrix();
+	glTranslatef(-3.f, 0.f, 0.f);
+	glColor3f(0.f, 0.f, 1.f);
+	glutSolidCube(1.5);
+	glPopMatrix();
+	glEndList();
+
+	//Torus
+	Torus = glGenLists(1);
+	glNewList(Torus, GL_COMPILE);
+	glPushMatrix();
+	glTranslatef(0.f, 0.f, -5.5f);
+	glColor3f(.5f, .5f, .5f);
+	glutSolidTorus(0.5, 1.5, 100, 100);
+	glPopMatrix();
+	glEndList();
+
+	// create the axes:
 	AxesList = glGenLists( 1 );
 	glNewList( AxesList, GL_COMPILE );
 		glLineWidth( AXES_WIDTH );
