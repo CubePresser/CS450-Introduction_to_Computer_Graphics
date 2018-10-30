@@ -15,35 +15,9 @@
 #include <GL/glu.h>
 #include "glut.h"
 
-
-//	This is a sample OpenGL / GLUT program
-//
-//	The objective is to draw a 3d object and change the color of the axes
-//		with a glut menu
-//
-//	The left mouse button does rotation
-//	The middle mouse button does scaling
-//	The user interface allows:
-//		1. The axes to be turned on and off
-//		2. The color of the axes to be changed
-//		3. Debugging to be turned on and off
-//		4. Depth cueing to be turned on and off
-//		5. The projection to be changed
-//		6. The transformations to be reset
-//		7. The program to quit
-//
-//	Author:			Joe Graphics
-
-// NOTE: There are a lot of good reasons to use const variables instead
-// of #define's.  However, Visual C++ does not allow a const variable
-// to be used as an array size or as the case in a switch( ) statement.  So in
-// the following, all constants are const variables except those which need to
-// be array sizes or cases in switch( ) statements.  Those are #defines.
-
-
 // title of these windows:
 
-const char *WINDOWTITLE = { "OpenGL / GLUT Sample -- Joe Graphics" };
+const char *WINDOWTITLE = { "OpenGL - Boilerplate Template" };
 const char *GLUITITLE   = { "User Interface Window" };
 
 
@@ -61,13 +35,6 @@ const int GLUIFALSE = { false };
 // initial window size:
 
 const int INIT_WINDOW_SIZE = { 600 };
-
-
-// size of the box:
-
-const float BOXSIZE = { 2.f };
-
-
 
 // multiplication factors for input interaction:
 //  (these are known from previous experience)
@@ -177,8 +144,6 @@ int		AxesOn;					// != 0 means to draw the axes
 int		DebugOn;				// != 0 means to print debugging info
 int		DepthCueOn;				// != 0 means to use intensity depth cueing
 int		DepthBufferOn;			// != 0 means to use the z-buffer
-int		DepthFightingOn;		// != 0 means to use the z-buffer
-GLuint	BoxList;				// object display list
 int		MainWindow;				// window id for main graphics window
 float	Scale;					// scaling factor
 int		WhichColor;				// index into Colors[ ]
@@ -194,7 +159,6 @@ void	Display( );
 void	DoAxesMenu( int );
 void	DoColorMenu( int );
 void	DoDepthBufferMenu( int );
-void	DoDepthFightingMenu( int );
 void	DoDepthMenu( int );
 void	DoDebugMenu( int );
 void	DoMainMenu( int );
@@ -310,7 +274,7 @@ Display( )
 
 	// specify shading to be flat:
 
-	glShadeModel( GL_FLAT );
+	glShadeModel( GL_SMOOTH );
 
 
 	// set the viewport to a square centered in the window:
@@ -390,29 +354,6 @@ Display( )
 
 	glEnable( GL_NORMALIZE );
 
-
-	// draw the current object:
-
-	glCallList( BoxList );
-
-	if( DepthFightingOn != 0 )
-	{
-		glPushMatrix( );
-			glRotatef( 90.,   0., 1., 0. );
-			glCallList( BoxList );
-		glPopMatrix( );
-	}
-
-
-	// draw some gratuitous text that just rotates on top of the scene:
-
-	glDisable( GL_DEPTH_TEST );
-	glColor3f( 0., 1., 1. );
-	DoRasterString( 0., 1., 0., "Text That Moves" );
-
-
-	// draw some gratuitous text that is fixed on the screen:
-	//
 	// the projection matrix is reset to define a scene whose
 	// world coordinate system goes from 0-100 in each axis
 	//
@@ -421,14 +362,9 @@ Display( )
 	// the modelview matrix is reset to identity as we don't
 	// want to transform these coordinates
 
-	glDisable( GL_DEPTH_TEST );
 	glMatrixMode( GL_PROJECTION );
 	glLoadIdentity( );
 	gluOrtho2D( 0., 100.,     0., 100. );
-	glMatrixMode( GL_MODELVIEW );
-	glLoadIdentity( );
-	glColor3f( 1., 1., 1. );
-	DoRasterString( 5., 5., 0., "Text That Doesn't" );
 
 
 	// swap the double-buffered framebuffers:
@@ -481,17 +417,6 @@ DoDepthBufferMenu( int id )
 	glutSetWindow( MainWindow );
 	glutPostRedisplay( );
 }
-
-
-void
-DoDepthFightingMenu( int id )
-{
-	DepthFightingOn = id;
-
-	glutSetWindow( MainWindow );
-	glutPostRedisplay( );
-}
-
 
 void
 DoDepthMenu( int id )
@@ -617,10 +542,6 @@ InitMenus( )
 	glutAddMenuEntry( "Off",  0 );
 	glutAddMenuEntry( "On",   1 );
 
-	int depthfightingmenu = glutCreateMenu( DoDepthFightingMenu );
-	glutAddMenuEntry( "Off",  0 );
-	glutAddMenuEntry( "On",   1 );
-
 	int debugmenu = glutCreateMenu( DoDebugMenu );
 	glutAddMenuEntry( "Off",  0 );
 	glutAddMenuEntry( "On",   1 );
@@ -633,7 +554,6 @@ InitMenus( )
 	glutAddSubMenu(   "Axes",          axesmenu);
 	glutAddSubMenu(   "Colors",        colormenu);
 	glutAddSubMenu(   "Depth Buffer",  depthbuffermenu);
-	glutAddSubMenu(   "Depth Fighting",depthfightingmenu);
 	glutAddSubMenu(   "Depth Cue",     depthcuemenu);
 	glutAddSubMenu(   "Projection",    projmenu );
 	glutAddMenuEntry( "Reset",         RESET );
@@ -712,7 +632,7 @@ InitGraphics( )
 	glutTabletButtonFunc( NULL );
 	glutMenuStateFunc( NULL );
 	glutTimerFunc( -1, NULL, 0 );
-	glutIdleFunc( NULL );
+	glutIdleFunc( Animate );
 
 	// init glew (a window must be open to do this):
 
@@ -738,66 +658,6 @@ InitGraphics( )
 void
 InitLists( )
 {
-	float dx = BOXSIZE / 2.f;
-	float dy = BOXSIZE / 2.f;
-	float dz = BOXSIZE / 2.f;
-	glutSetWindow( MainWindow );
-
-	// create the object:
-
-	BoxList = glGenLists( 1 );
-	glNewList( BoxList, GL_COMPILE );
-
-		glBegin( GL_QUADS );
-
-			glColor3f( 0., 0., 1. );
-			glNormal3f( 0., 0.,  1. );
-				glVertex3f( -dx, -dy,  dz );
-				glVertex3f(  dx, -dy,  dz );
-				glVertex3f(  dx,  dy,  dz );
-				glVertex3f( -dx,  dy,  dz );
-
-			glNormal3f( 0., 0., -1. );
-				glTexCoord2f( 0., 0. );
-				glVertex3f( -dx, -dy, -dz );
-				glTexCoord2f( 0., 1. );
-				glVertex3f( -dx,  dy, -dz );
-				glTexCoord2f( 1., 1. );
-				glVertex3f(  dx,  dy, -dz );
-				glTexCoord2f( 1., 0. );
-				glVertex3f(  dx, -dy, -dz );
-
-			glColor3f( 1., 0., 0. );
-			glNormal3f(  1., 0., 0. );
-				glVertex3f(  dx, -dy,  dz );
-				glVertex3f(  dx, -dy, -dz );
-				glVertex3f(  dx,  dy, -dz );
-				glVertex3f(  dx,  dy,  dz );
-
-			glNormal3f( -1., 0., 0. );
-				glVertex3f( -dx, -dy,  dz );
-				glVertex3f( -dx,  dy,  dz );
-				glVertex3f( -dx,  dy, -dz );
-				glVertex3f( -dx, -dy, -dz );
-
-			glColor3f( 0., 1., 0. );
-			glNormal3f( 0.,  1., 0. );
-				glVertex3f( -dx,  dy,  dz );
-				glVertex3f(  dx,  dy,  dz );
-				glVertex3f(  dx,  dy, -dz );
-				glVertex3f( -dx,  dy, -dz );
-
-			glNormal3f( 0., -1., 0. );
-				glVertex3f( -dx, -dy,  dz );
-				glVertex3f( -dx, -dy, -dz );
-				glVertex3f(  dx, -dy, -dz );
-				glVertex3f(  dx, -dy,  dz );
-
-		glEnd( );
-
-	glEndList( );
-
-
 	// create the axes:
 
 	AxesList = glGenLists( 1 );
@@ -903,14 +763,14 @@ MouseMotion( int x, int y )
 	int dx = x - Xmouse;		// change in mouse coords
 	int dy = y - Ymouse;
 
-	if( ( ActiveButton & LEFT ) != 0 )
+	if( ( ActiveButton & LEFT ) != 0 ) //If the left button bit is active
 	{
 		Xrot += ( ANGFACT*dy );
 		Yrot += ( ANGFACT*dx );
 	}
 
 
-	if( ( ActiveButton & MIDDLE ) != 0 )
+	if( ( ActiveButton & MIDDLE ) != 0 ) //If the middle button bit is active
 	{
 		Scale += SCLFACT * (float) ( dx - dy );
 
@@ -939,7 +799,6 @@ Reset( )
 	AxesOn = 1;
 	DebugOn = 0;
 	DepthBufferOn = 1;
-	DepthFightingOn = 0;
 	DepthCueOn = 0;
 	Scale  = 1.0;
 	WhichColor = WHITE;
