@@ -150,6 +150,18 @@ int		WhichColor;				// index into Colors[ ]
 int		WhichProjection;		// ORTHO or PERSP
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
+float	Time;
+
+//Objects
+GLuint	Teapot;
+GLuint	Cone;
+GLuint	Sphere;
+GLuint	Cube;
+GLuint	Torus;
+
+//Texture
+GLuint		texture;
+char*		texture_name = "scales-texture.bmp";
 
 
 // function prototypes:
@@ -167,6 +179,7 @@ void	DoRasterString( float, float, float, char * );
 void	DoStrokeString( float, float, float, float, char * );
 float	ElapsedSeconds( );
 void	InitGraphics( );
+void	InitTextures( );
 void	InitLists( );
 void	InitMenus( );
 void	Keyboard( unsigned char, int, int );
@@ -178,6 +191,10 @@ void	Visibility( int );
 
 void	Axes( float );
 void	HsvRgb( float[3], float [3] );
+
+unsigned char *		BmpToTexture(char*, int*, int*);
+int					ReadInt(FILE *);
+short				ReadShort(FILE *);
 
 // main program:
 
@@ -195,6 +212,7 @@ main( int argc, char *argv[ ] )
 
 	InitGraphics( );
 
+	InitTextures( );
 
 	// create the display structures that will not change:
 
@@ -235,8 +253,16 @@ main( int argc, char *argv[ ] )
 void
 Animate( )
 {
-	// put animation stuff in here -- change some global variables
-	// for Display( ) to find:
+	//Ensure that for each monitor, animation cycle is always 1000 milliseconds
+	#define MS_IN_THE_ANIMATION_CYCLE	20000
+	int ms = glutGet(GLUT_ELAPSED_TIME);	// milliseconds
+	ms %= MS_IN_THE_ANIMATION_CYCLE;
+	Time = (float)ms / (float)MS_IN_THE_ANIMATION_CYCLE;        // [ 0., 1. )
+
+	// force a call to Display( ) next time it is convenient:
+
+	glutSetWindow(MainWindow);
+	glutPostRedisplay();
 
 	// force a call to Display( ) next time it is convenient:
 
@@ -340,8 +366,55 @@ Display( )
 		glDisable( GL_FOG );
 	}
 
+	//Rotate all objects around origin
+	
+	glPushMatrix();
 
-	// possibly draw the axes:
+	glRotatef(Time * 360.0f, 0.f, 1.f, 0.f);
+
+	//Draw teapot with texture mapped onto it
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, texture);
+
+	glPushMatrix();
+	glTranslatef(0.f, 0.f, -3.f);
+	glRotatef(Time * 360.f, 0.f, 1.f, 0.f);
+	glColor3f(.75f, .75f, 1.0f);
+	glutSolidTeapot(1.2);
+	glPopMatrix();
+
+	glDisable(GL_TEXTURE_2D);
+	
+	//Cone
+	glPushMatrix();
+	glTranslatef(3.f, -1.f, 0.f);
+	glRotatef(-90.f, 1.f, 0.f, 0.f);
+	glColor3f(1.f, 0.f, 0.f);
+	glutSolidCone(1.0, 2.0, 10, 10);
+	glPopMatrix();
+
+	//Sphere
+	glPushMatrix();
+	glTranslatef(0.f, 0.f, 3.f);
+	glColor3f(0.f, 1.f, 0.f);
+	glutSolidSphere(1.0, 10, 10);
+	glPopMatrix();
+
+	//Cube
+	glPushMatrix();
+	glTranslatef(-3.f, 0.f, 0.f);
+	glColor3f(0.f, 0.f, 1.f);
+	glutSolidCube(1.5);
+	glPopMatrix();
+
+	glPopMatrix();
+
+	//Torus
+	glPushMatrix();
+	glTranslatef(0.f, 0.f, -5.5f);
+	glColor3f(.5f, .5f, .5f);
+	glutSolidTorus(0.5, 1.5, 100, 100);
+	glPopMatrix();
 
 	if( AxesOn != 0 )
 	{
@@ -649,6 +722,37 @@ InitGraphics( )
 
 }
 
+void
+InitTextures()
+{
+	int width, height, level, ncomps, border;
+
+	//Get texel list for shallow water
+	unsigned char * texture_a = BmpToTexture(texture_name, &width, &height);
+
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	glGenTextures(1, &texture);
+
+	glBindTexture(GL_TEXTURE_2D, texture); //Make shallow water texture current
+
+	//Specify texture wrapping for S and T
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+	//Texture filter
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+	//Texture environment
+	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+
+	//Create shallow water texture
+	level = 0; //Mip mapping
+	ncomps = 3; //Number of texture components (3 for RGB)
+	border = 0; //Width of the texture border in pixels
+
+	glTexImage2D(GL_TEXTURE_2D, level, ncomps, width, height, border, GL_RGB, GL_UNSIGNED_BYTE, texture_a);
+}
 
 // initialize the display lists that will not change:
 // (a display list is a way to store opengl commands in
@@ -804,6 +908,7 @@ Reset( )
 	WhichColor = WHITE;
 	WhichProjection = PERSP;
 	Xrot = Yrot = 0.;
+	Time = 0;
 }
 
 
@@ -1038,4 +1143,167 @@ HsvRgb( float hsv[3], float rgb[3] )
 	rgb[0] = r;
 	rgb[1] = g;
 	rgb[2] = b;
+}
+
+/**
+ ** read a BMP file into a Texture:
+ **/
+
+struct bmfh
+{
+	short bfType;
+	int bfSize;
+	short bfReserved1;
+	short bfReserved2;
+	int bfOffBits;
+} FileHeader;
+
+struct bmih
+{
+	int biSize;
+	int biWidth;
+	int biHeight;
+	short biPlanes;
+	short biBitCount;
+	int biCompression;
+	int biSizeImage;
+	int biXPelsPerMeter;
+	int biYPelsPerMeter;
+	int biClrUsed;
+	int biClrImportant;
+} InfoHeader;
+
+const int birgb = { 0 };
+
+unsigned char *
+BmpToTexture(char *filename, int *width, int *height)
+{
+
+	int s, t, e;		// counters
+	int numextra;		// # extra bytes each line in the file is padded with
+	FILE *fp;
+	unsigned char *texture;
+	int nums, numt;
+	unsigned char *tp;
+
+
+	fp = fopen(filename, "rb");
+	if (fp == NULL)
+	{
+		fprintf(stderr, "Cannot open Bmp file '%s'\n", filename);
+		return NULL;
+	}
+
+	FileHeader.bfType = ReadShort(fp);
+
+
+	// if bfType is not 0x4d42, the file is not a bmp:
+
+	if (FileHeader.bfType != 0x4d42)
+	{
+		fprintf(stderr, "Wrong type of file: 0x%0x\n", FileHeader.bfType);
+		fclose(fp);
+		return NULL;
+	}
+
+
+	FileHeader.bfSize = ReadInt(fp);
+	FileHeader.bfReserved1 = ReadShort(fp);
+	FileHeader.bfReserved2 = ReadShort(fp);
+	FileHeader.bfOffBits = ReadInt(fp);
+
+
+	InfoHeader.biSize = ReadInt(fp);
+	InfoHeader.biWidth = ReadInt(fp);
+	InfoHeader.biHeight = ReadInt(fp);
+
+	nums = InfoHeader.biWidth;
+	numt = InfoHeader.biHeight;
+
+	InfoHeader.biPlanes = ReadShort(fp);
+	InfoHeader.biBitCount = ReadShort(fp);
+	InfoHeader.biCompression = ReadInt(fp);
+	InfoHeader.biSizeImage = ReadInt(fp);
+	InfoHeader.biXPelsPerMeter = ReadInt(fp);
+	InfoHeader.biYPelsPerMeter = ReadInt(fp);
+	InfoHeader.biClrUsed = ReadInt(fp);
+	InfoHeader.biClrImportant = ReadInt(fp);
+
+
+	// fprintf( stderr, "Image size found: %d x %d\n", ImageWidth, ImageHeight );
+
+
+	texture = new unsigned char[3 * nums * numt];
+	if (texture == NULL)
+	{
+		fprintf(stderr, "Cannot allocate the texture array!\b");
+		return NULL;
+	}
+
+
+	// extra padding bytes:
+
+	numextra = 4 * (((3 * InfoHeader.biWidth) + 3) / 4) - 3 * InfoHeader.biWidth;
+
+
+	// we do not support compression:
+
+	if (InfoHeader.biCompression != birgb)
+	{
+		fprintf(stderr, "Wrong type of image compression: %d\n", InfoHeader.biCompression);
+		fclose(fp);
+		return NULL;
+	}
+
+
+
+	rewind(fp);
+	fseek(fp, 14 + 40, SEEK_SET);
+
+	if (InfoHeader.biBitCount == 24)
+	{
+		for (t = 0, tp = texture; t < numt; t++)
+		{
+			for (s = 0; s < nums; s++, tp += 3)
+			{
+				*(tp + 2) = fgetc(fp);		// b
+				*(tp + 1) = fgetc(fp);		// g
+				*(tp + 0) = fgetc(fp);		// r
+			}
+
+			for (e = 0; e < numextra; e++)
+			{
+				fgetc(fp);
+			}
+		}
+	}
+
+	fclose(fp);
+
+	*width = nums;
+	*height = numt;
+	return texture;
+}
+
+
+
+int
+ReadInt(FILE *fp)
+{
+	unsigned char b3, b2, b1, b0;
+	b0 = fgetc(fp);
+	b1 = fgetc(fp);
+	b2 = fgetc(fp);
+	b3 = fgetc(fp);
+	return (b3 << 24) | (b2 << 16) | (b1 << 8) | b0;
+}
+
+
+short
+ReadShort(FILE *fp)
+{
+	unsigned char b1, b0;
+	b0 = fgetc(fp);
+	b1 = fgetc(fp);
+	return (b1 << 8) | b0;
 }
