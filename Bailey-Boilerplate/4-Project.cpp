@@ -126,6 +126,30 @@ const GLfloat Colors[ ][3] =
 	{ 0., 0., 0. },		// black
 };
 
+float
+White[] = { 1.,1.,1.,1. };
+// utility to create an array from 3 separate values:
+float *
+Array3(float a, float b, float c)
+{
+	static float array[4];
+	array[0] = a;
+	array[1] = b;
+	array[2] = c;
+	array[3] = 1.;
+	return array;
+}
+// utility to create an array from a multiplier and an array:
+float *
+MulArray3(float factor, float array0[3])
+{
+	static float array[4];
+	array[0] = factor * array0[0];
+	array[1] = factor * array0[1];
+	array[2] = factor * array0[2];
+	array[3] = 1.;
+	return array;
+}
 
 // fog parameters:
 
@@ -192,9 +216,16 @@ void	Visibility( int );
 void	Axes( float );
 void	HsvRgb( float[3], float [3] );
 
+//Textures
 unsigned char *		BmpToTexture(char*, int*, int*);
 int					ReadInt(FILE *);
 short				ReadShort(FILE *);
+
+//Lighting
+void	SetShinyMaterial( float, float, float, float );
+void	SetDullMaterial(float, float, float);
+void	SetPointLight( int, float, float, float, float, float, float );
+void	SetSpotLight( int, float, float, float, float, float, float, float, float, float );
 
 // main program:
 
@@ -331,7 +362,6 @@ Display( )
 	glMatrixMode( GL_MODELVIEW );
 	glLoadIdentity( );
 
-
 	// set the eye position, look-at position, and up-vector:
 
 	gluLookAt( 0., 0., 3.,     0., 0., 0.,     0., 1., 0. );
@@ -366,6 +396,33 @@ Display( )
 		glDisable( GL_FOG );
 	}
 
+	glEnable(GL_LIGHTING);
+
+	//Draw light source object
+	glPushMatrix();
+	glDisable(GL_LIGHTING);
+	glColor3f(1.f, 1.f, 1.f);
+	glScalef(.05f, .05f, .05f);
+	glCallList(Sphere);
+	SetPointLight(GL_LIGHT0, 0.f, 0.f, 0.f, 1.f, 1.f, 1.f);
+	glEnable(GL_LIGHTING);
+	glPopMatrix();
+
+	glPushMatrix();
+	glRotatef(-Time * 360.0f, 0.f, 1.f, 0.f);
+
+	//Draw light source object
+	glPushMatrix();
+	glDisable(GL_LIGHTING);
+	glRotatef(-90, 1.f, 0.f, 0.f);
+	glScalef(.1f, .1f, .1f);
+	glTranslatef(-3.f, -1.0f, 0.f);
+	glCallList(Cone);
+	glEnable(GL_LIGHTING);
+	glPopMatrix();
+	SetSpotLight(GL_LIGHT1, 0.f, 0.f, 0.f, 0.f, 0.f, 1.f, 20.f, 0.f, 0.f);
+	glPopMatrix();
+
 	//Rotate all objects around origin
 	
 	glPushMatrix();
@@ -381,13 +438,28 @@ Display( )
 	
 	glCallList(Cone); //Draw cone
 
+	glShadeModel(GL_FLAT);
+	glPushMatrix();
+	glColor3f(0.f, 1.f, 0.f);
+	glTranslatef(0.f, 0.f, 3.f);
+	glRotatef(Time * 360.f, 0.f, 1.f, 0.f);
 	glCallList(Sphere); //Draw sphere
+	glPopMatrix();
+	glShadeModel(GL_SMOOTH);
 
+	glPushMatrix();
+	glTranslatef(-3.f, 0.f, 0.f);
+	glRotatef(Time * 360.f, 0.f, 0.f, 1.f);
+	glRotatef(Time * 360.f, 0.f, 1.f, 0.f);
 	glCallList(Cube); //Draw cube
+	glPopMatrix();
 
 	glPopMatrix();
 
 	glCallList(Torus); //Draw torus
+
+	glDisable(GL_LIGHT0);
+	glDisable(GL_LIGHTING);
 
 	if( AxesOn != 0 )
 	{
@@ -395,6 +467,7 @@ Display( )
 		glCallList( AxesList );
 	}
 
+	
 
 	// since we are using glScalef( ), be sure normals get unitized:
 
@@ -739,6 +812,7 @@ InitLists( )
 	Teapot = glGenLists(1);
 	glNewList(Teapot, GL_COMPILE);
 	glPushMatrix();
+	SetShinyMaterial(.75f, .75f, .75f, 10.f);
 	glEnable(GL_TEXTURE_2D);
 	glBindTexture(GL_TEXTURE_2D, texture);
 	glColor3f(.75f, .75f, 1.0f);
@@ -751,6 +825,7 @@ InitLists( )
 	Cone = glGenLists(1);
 	glNewList(Cone, GL_COMPILE);
 	glPushMatrix();
+	SetShinyMaterial(1.f, 0.f, 0.f, 10.f);
 	glTranslatef(3.f, -1.f, 0.f);
 	glRotatef(-90.f, 1.f, 0.f, 0.f);
 	glColor3f(1.f, 0.f, 0.f);
@@ -762,8 +837,7 @@ InitLists( )
 	Sphere = glGenLists(1);
 	glNewList(Sphere, GL_COMPILE);
 	glPushMatrix();
-	glTranslatef(0.f, 0.f, 3.f);
-	glColor3f(0.f, 1.f, 0.f);
+	SetDullMaterial(0.f, 1.f, 0.f);
 	glutSolidSphere(1.0, 10, 10);
 	glPopMatrix();
 	glEndList();
@@ -772,7 +846,7 @@ InitLists( )
 	Cube = glGenLists(1);
 	glNewList(Cube, GL_COMPILE);
 	glPushMatrix();
-	glTranslatef(-3.f, 0.f, 0.f);
+	SetDullMaterial(0.f, 0.f, 1.f);
 	glColor3f(0.f, 0.f, 1.f);
 	glutSolidCube(1.5);
 	glPopMatrix();
@@ -782,6 +856,7 @@ InitLists( )
 	Torus = glGenLists(1);
 	glNewList(Torus, GL_COMPILE);
 	glPushMatrix();
+	SetShinyMaterial(.5f, .5f, .5f, 10.f);
 	glTranslatef(0.f, 0.f, -5.5f);
 	glColor3f(.5f, .5f, .5f);
 	glutSolidTorus(0.5, 1.5, 100, 100);
@@ -925,7 +1000,7 @@ void
 Reset( )
 {
 	ActiveButton = 0;
-	AxesOn = 1;
+	AxesOn = 0;
 	DebugOn = 0;
 	DepthBufferOn = 1;
 	DepthCueOn = 0;
@@ -1331,4 +1406,62 @@ ReadShort(FILE *fp)
 	b0 = fgetc(fp);
 	b1 = fgetc(fp);
 	return (b1 << 8) | b0;
+}
+
+//Lighting functions
+void
+SetShinyMaterial (float r, float g, float b, float shininess)
+{
+	glMaterialfv(GL_BACK, GL_EMISSION, Array3(0., 0., 0.));
+	glMaterialfv(GL_BACK, GL_AMBIENT, MulArray3(.4f, White));
+	glMaterialfv(GL_BACK, GL_DIFFUSE, MulArray3(1., White));
+	glMaterialfv(GL_BACK, GL_SPECULAR, Array3(0., 0., 0.));
+	glMaterialf(GL_BACK, GL_SHININESS, 2.f);
+	glMaterialfv(GL_FRONT, GL_EMISSION, Array3(0., 0., 0.));
+	glMaterialfv(GL_FRONT, GL_AMBIENT, Array3(r, g, b));
+	glMaterialfv(GL_FRONT, GL_DIFFUSE, Array3(r, g, b));
+	glMaterialfv(GL_FRONT, GL_SPECULAR, MulArray3(.8f, White));
+	glMaterialf(GL_FRONT, GL_SHININESS, shininess);
+}
+
+void
+SetDullMaterial(float r, float g, float b)
+{
+	glMaterialfv(GL_BACK, GL_EMISSION, Array3(0., 0., 0.));
+	glMaterialfv(GL_BACK, GL_AMBIENT, MulArray3(.4f, White));
+	glMaterialfv(GL_BACK, GL_DIFFUSE, MulArray3(1., White));
+	glMaterialfv(GL_BACK, GL_SPECULAR, Array3(0., 0., 0.));
+	glMaterialf(GL_BACK, GL_SHININESS, 2.f);
+	glMaterialfv(GL_FRONT, GL_EMISSION, Array3(0., 0., 0.));
+	glMaterialfv(GL_FRONT, GL_AMBIENT, Array3(r, g, b));
+	glMaterialfv(GL_FRONT, GL_DIFFUSE, Array3(r, g, b));
+}
+
+void
+SetPointLight (int ilight, float x, float y, float z, float r, float g, float b)
+{
+	glLightfv(ilight, GL_POSITION, Array3(x, y, z));
+	glLightfv(ilight, GL_AMBIENT, Array3(0., 0., 0.));
+	glLightfv(ilight, GL_DIFFUSE, Array3(r, g, b));
+	glLightfv(ilight, GL_SPECULAR, Array3(r, g, b));
+	glLightf(ilight, GL_CONSTANT_ATTENUATION, 1.);
+	glLightf(ilight, GL_LINEAR_ATTENUATION, 0.);
+	glLightf(ilight, GL_QUADRATIC_ATTENUATION, 0.);
+	glEnable(ilight);
+}
+
+void
+SetSpotLight (int ilight, float x, float y, float z, float xdir, float ydir, float zdir, float r, float g, float b)
+{
+	glLightfv(ilight, GL_POSITION, Array3(x, y, z));
+	glLightfv(ilight, GL_SPOT_DIRECTION, Array3(xdir, ydir, zdir));
+	glLightf(ilight, GL_SPOT_EXPONENT, 1.);
+	glLightf(ilight, GL_SPOT_CUTOFF, 20.);
+	glLightfv(ilight, GL_AMBIENT, Array3(0., 0., 0.));
+	glLightfv(ilight, GL_DIFFUSE, Array3(r, g, b));
+	glLightfv(ilight, GL_SPECULAR, Array3(r, g, b));
+	glLightf(ilight, GL_CONSTANT_ATTENUATION, 1.);
+	glLightf(ilight, GL_LINEAR_ATTENUATION, 0.);
+	glLightf(ilight, GL_QUADRATIC_ATTENUATION, 0.);
+	glEnable(ilight);
 }
