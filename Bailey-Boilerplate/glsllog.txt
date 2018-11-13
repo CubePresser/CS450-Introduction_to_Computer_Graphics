@@ -1,0 +1,5 @@
+
+0(9) : error C1115: unable to find compatible overloaded function "abs(float, float)"
+0(9) : error C0000: syntax error, unexpected ';', expecting ',' or ')' at token ";"
+0(10) : error C1503: undefined variable "myColor"
+
