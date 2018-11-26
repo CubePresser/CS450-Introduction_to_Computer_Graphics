@@ -11,11 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="5-Project.cpp" />
-    <ClCompile Include="glslprogram.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="glslprogram.h" />
+    <ClCompile Include="6-Project.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{3A18C8BB-2941-432F-8F8B-BEB51352D229}</ProjectGuid>
