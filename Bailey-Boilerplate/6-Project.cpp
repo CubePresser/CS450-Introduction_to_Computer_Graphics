@@ -56,7 +56,7 @@ const int RIGHT = { 1 };
 
 //Bezier Curve stuff
 
-const int NUMCURVES = 8;
+const int NUMCURVES = 100;
 const int NUMPOINTS = 100;
 
 struct Point
@@ -164,6 +164,8 @@ int		AxesOn;					// != 0 means to draw the axes
 int		DebugOn;				// != 0 means to print debugging info
 int		DepthCueOn;				// != 0 means to use intensity depth cueing
 int		DepthBufferOn;			// != 0 means to use the z-buffer
+int		ControlPointsOn;
+int		ControlLinesOn;
 int		MainWindow;				// window id for main graphics window
 float	Scale;					// scaling factor
 int		WhichColor;				// index into Colors[ ]
@@ -171,6 +173,7 @@ int		WhichProjection;		// ORTHO or PERSP
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
 float	Time;
+bool	Freeze;
 float	DeltaAngle;
 
 // function prototypes:
@@ -186,6 +189,8 @@ void	DoMainMenu( int );
 void	DoProjectMenu( int );
 void	DoRasterString( float, float, float, char * );
 void	DoStrokeString( float, float, float, float, char * );
+void	DoControlPoints(int);
+void	DoControlLines(int);
 float	ElapsedSeconds( );
 void	InitGraphics( );
 void	InitLists( );
@@ -400,19 +405,32 @@ Display( )
 		glEnd();
 
 		//Draw control points
-		glPointSize(5.f);
-		glColor3f(1.f, 1.f, 1.f);
-		glBegin(GL_POINTS);
-		glVertex3f(Stem.p0.x, Stem.p0.y, Stem.p0.z);
-		glVertex3f(Stem.p1.x, Stem.p1.y, Stem.p1.z);
-		glVertex3f(Stem.p2.x, Stem.p2.y, Stem.p2.z);
-		glVertex3f(Stem.p3.x, Stem.p3.y, Stem.p3.z);
-		glEnd();
+		if (ControlPointsOn)
+		{
+			glPointSize(6.f);
+			glBegin(GL_POINTS);
+			glVertex3f(Stem.p0.x, Stem.p0.y, Stem.p0.z);
+			glVertex3f(Stem.p1.x, Stem.p1.y, Stem.p1.z);
+			glVertex3f(Stem.p2.x, Stem.p2.y, Stem.p2.z);
+			glVertex3f(Stem.p3.x, Stem.p3.y, Stem.p3.z);
+			glEnd();
+		}
+
+		//Draw lines between control points
+		if (ControlLinesOn)
+		{
+			glLineWidth(1.f);
+			glColor3f(1.f, 1.f, 1.f);
+			glBegin(GL_LINE_STRIP);
+			glVertex3f(Stem.p0.x, Stem.p0.y, Stem.p0.z);
+			glVertex3f(Stem.p1.x, Stem.p1.y, Stem.p1.z);
+			glVertex3f(Stem.p2.x, Stem.p2.y, Stem.p2.z);
+			glVertex3f(Stem.p3.x, Stem.p3.y, Stem.p3.z);
+			glEnd();
+		}
 
 		glPopMatrix();
 	}
-
-	glLineWidth(1.f);
 
 
 	// possibly draw the axes:
@@ -574,6 +592,20 @@ DoStrokeString( float x, float y, float z, float ht, char *s )
 	glPopMatrix( );
 }
 
+void DoControlPoints(int id)
+{
+	ControlPointsOn = id;
+
+	glutSetWindow(MainWindow);
+	glutPostRedisplay();
+}
+void DoControlLines(int id)
+{
+	ControlLinesOn = id;
+
+	glutSetWindow(MainWindow);
+	glutPostRedisplay();
+}
 
 // return the number of seconds since the start of the program:
 
@@ -608,6 +640,14 @@ InitMenus( )
 	glutAddMenuEntry( "Off",  0 );
 	glutAddMenuEntry( "On",   1 );
 
+	int controlpointsmenu = glutCreateMenu(DoControlPoints);
+	glutAddMenuEntry("Off", 0);
+	glutAddMenuEntry("On", 1);
+
+	int controllinesmenu = glutCreateMenu(DoControlLines);
+	glutAddMenuEntry("Off", 0);
+	glutAddMenuEntry("On", 1);
+
 	int depthcuemenu = glutCreateMenu( DoDepthMenu );
 	glutAddMenuEntry( "Off",  0 );
 	glutAddMenuEntry( "On",   1 );
@@ -627,6 +667,8 @@ InitMenus( )
 	int mainmenu = glutCreateMenu( DoMainMenu );
 	glutAddSubMenu(   "Axes",          axesmenu);
 	glutAddSubMenu(   "Colors",        colormenu);
+	glutAddSubMenu("Control Points", controlpointsmenu);
+	glutAddSubMenu("Control Lines", controllinesmenu);
 	glutAddSubMenu(   "Depth Buffer",  depthbuffermenu);
 	glutAddSubMenu(   "Depth Cue",     depthcuemenu);
 	glutAddSubMenu(   "Projection",    projmenu );
@@ -771,6 +813,14 @@ Keyboard( unsigned char c, int x, int y )
 
 	switch( c )
 	{
+		case 'f':
+			Freeze = !Freeze;
+			if (Freeze)
+				glutIdleFunc(NULL);
+			else
+				glutIdleFunc(Animate);
+			break;
+
 		case 'o':
 		case 'O':
 			WhichProjection = ORTHO;
@@ -896,6 +946,9 @@ Reset( )
 	WhichColor = WHITE;
 	WhichProjection = PERSP;
 	Xrot = Yrot = 0.;
+	ControlPointsOn = 0;
+	ControlLinesOn = 0;
+	Freeze = false;
 }
 
 
