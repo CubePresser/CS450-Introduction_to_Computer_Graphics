@@ -366,7 +366,7 @@ Display( )
 
 	//Draw the Bezier curves
 
-	for (float angle = 0.f; angle <= (360.f - DeltaAngle); angle += DeltaAngle)
+	for (float angle = 0.f; angle <= 360.f; angle += DeltaAngle)
 	{
 		glLineWidth(3.f);
 		float hsv[3] = {angle, 1.f, 1.f};
