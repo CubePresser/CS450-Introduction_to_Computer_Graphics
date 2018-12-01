@@ -18,7 +18,7 @@
 
 // title of these windows:
 
-const char *WINDOWTITLE = { "OpenGL - Boilerplate" };
+const char *WINDOWTITLE = { "CS450 Final Project - Jonathan Jones" };
 const char *GLUITITLE   = { "User Interface Window" };
 
 
@@ -31,6 +31,7 @@ const int GLUIFALSE = { false };
 // the escape key:
 
 #define ESCAPE		0x1b
+#define NUMPOINTS   100
 
 
 // initial window size:
@@ -87,14 +88,29 @@ int		ActiveButton;			// current button that is down
 GLuint	AxesList;				// list to hold the axes
 int		AxesOn;					// != 0 means to draw the axes
 int		DebugOn;				// != 0 means to print debugging info
-int		DepthCueOn;				// != 0 means to use intensity depth cueing
-int		DepthBufferOn;			// != 0 means to use the z-buffer
+int		ControlPoints;
 int		MainWindow;				// window id for main graphics window
 float	Scale, Scale2;			// scaling factor
 int		Perspective;			// ORTHO or PERSP
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
 float	Hue;					// Value for color of surface
+
+//Bezier curves
+
+struct Point
+{
+	float x0, y0, z0;       // initial coordinates
+	float x, y, z;        // animated coordinates
+};
+
+struct Curve
+{
+	float r, g, b;
+	Point p0, p1, p2, p3;
+};
+
+Curve Curves[4];
 
 //Animation
 int		animate_start_time;
@@ -142,6 +158,8 @@ void	Visibility( int );
 void	Axes( float );
 void	HsvRgb( float[3], float [3] );
 void	UpdateGLUI(int);
+void	InitCurves();
+void	BezierCurve(float[NUMPOINTS][3], Curve); //Returns a list of vertices in a bezier curve
 
 // main program:
 
@@ -256,45 +274,41 @@ void Buttons(int id)
 // draw the complete scene:
 
 void
-Display( )
+Display()
 {
-	
 
-	if( DebugOn != 0 )
+
+	if (DebugOn != 0)
 	{
-		fprintf( stderr, "Display\n" );
+		fprintf(stderr, "Display\n");
 	}
 
 
 	// set which window we want to do the graphics into:
 
-	glutSetWindow( MainWindow );
+	glutSetWindow(MainWindow);
 
 
 	// erase the background:
 
-	glDrawBuffer( GL_BACK );
-	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+	glDrawBuffer(GL_BACK);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	if( DepthBufferOn != 0 )
-		glEnable( GL_DEPTH_TEST );
-	else
-		glDisable( GL_DEPTH_TEST );
-
+	glEnable(GL_DEPTH_TEST);
 
 	// specify shading to be flat:
 
-	glShadeModel( GL_SMOOTH );
+	glShadeModel(GL_SMOOTH);
 
 
 	// set the viewport to a square centered in the window:
 
-	GLsizei vx = glutGet( GLUT_WINDOW_WIDTH );
-	GLsizei vy = glutGet( GLUT_WINDOW_HEIGHT );
+	GLsizei vx = glutGet(GLUT_WINDOW_WIDTH);
+	GLsizei vy = glutGet(GLUT_WINDOW_HEIGHT);
 	GLsizei v = vx < vy ? vx : vy;			// minimum dimension
-	GLint xl = ( vx - v ) / 2;
-	GLint yb = ( vy - v ) / 2;
-	glViewport( xl, yb,  v, v );
+	GLint xl = (vx - v) / 2;
+	GLint yb = (vy - v) / 2;
+	glViewport(xl, yb, v, v);
 
 
 	// set the viewing volume:
@@ -302,20 +316,20 @@ Display( )
 	// given as DISTANCES IN FRONT OF THE EYE
 	// USE gluOrtho2D( ) IF YOU ARE DOING 2D !
 
-	glMatrixMode( GL_PROJECTION );
-	glLoadIdentity( );
-	if( !Perspective )
-		glOrtho( -3., 3.,     -3., 3.,     0.1, 1000. );
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	if (!Perspective)
+		glOrtho(-3., 3., -3., 3., 0.1, 1000.);
 	else
-		gluPerspective( 90., 1.,	0.1, 1000. );
+		gluPerspective(90., 1., 0.1, 1000.);
 
-	glMatrixMode( GL_MODELVIEW );
-	glLoadIdentity( );
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
 
 
 	// set the eye position, look-at position, and up-vector:
 
-	gluLookAt( 0., 0., 3.,     0., 0., 0.,     0., 1., 0. );
+	gluLookAt(0., 0., 3., 0., 0., 0., 0., 1., 0.);
 
 
 	// rotate the scene:
@@ -337,7 +351,90 @@ Display( )
 	glColor3f(rgb[0], rgb[1], rgb[2]);
 
 	// place the objects into the scene here ----------------------------------------------------------
-	
+
+	double delta = sin(Time) * 1.5f;
+	//Animate control points
+	Curves[0].p0.y = 0.f;
+	Curves[0].p1.y = delta * .25f;
+	Curves[0].p2.y = delta * .5f;
+	Curves[0].p3.y = 0.f;
+
+	Curves[1].p0.y = delta * .25f;
+	Curves[1].p1.y = delta * .5f;
+	Curves[1].p2.y = delta * .75f;
+	Curves[1].p3.y = delta * .5f;
+
+	Curves[2].p0.y = delta * .5f;
+	Curves[2].p1.y = delta * .75f;
+	Curves[2].p2.y = delta * .5f;
+	Curves[2].p3.y = delta * .25f;
+
+	Curves[3].p0.y = 0.f;
+	Curves[3].p1.y = delta * .5f;
+	Curves[3].p2.y = delta * .25f;
+	Curves[3].p3.y = 0.f;
+
+	//Display control points
+
+	if (ControlPoints)
+	{
+		glPointSize(5.f);
+		glBegin(GL_POINTS);
+		for (int i = 0; i < 4; i++)
+		{
+			glVertex3f(Curves[i].p0.x, Curves[i].p0.y, Curves[i].p0.z);
+			glVertex3f(Curves[i].p1.x, Curves[i].p1.y, Curves[i].p1.z);
+			glVertex3f(Curves[i].p2.x, Curves[i].p2.y, Curves[i].p2.z);
+			glVertex3f(Curves[i].p3.x, Curves[i].p3.y, Curves[i].p3.z);
+		}
+		glEnd();
+		glPointSize(1.f);
+	}
+
+	//Generate all the vertices in the mesh
+	float curve0[NUMPOINTS][3];
+	float curve1[NUMPOINTS][3];
+	float curve2[NUMPOINTS][3];
+	float curve3[NUMPOINTS][3];
+
+	BezierCurve(curve0, Curves[0]);
+	BezierCurve(curve1, Curves[1]);
+	BezierCurve(curve2, Curves[2]);
+	BezierCurve(curve3, Curves[3]);
+
+
+	//Display surface vertices
+	for (int i = 0; i < NUMPOINTS; i++)
+	{
+		Curve aux;
+		float auxCurve[NUMPOINTS][3];
+
+		aux.p0.x = curve0[i][0];
+		aux.p0.y = curve0[i][1];
+		aux.p0.z = curve0[i][2];
+
+		aux.p1.x = curve1[i][0];
+		aux.p1.y = curve1[i][1];
+		aux.p1.z = curve1[i][2];
+
+		aux.p2.x = curve2[i][0];
+		aux.p2.y = curve2[i][1];
+		aux.p2.z = curve2[i][2];
+
+		aux.p3.x = curve3[i][0];
+		aux.p3.y = curve3[i][1];
+		aux.p3.z = curve3[i][2];
+		
+		BezierCurve(auxCurve, aux);
+
+		glBegin(GL_POINTS);
+		for (int i = 0; i < NUMPOINTS; i++)
+		{
+			glVertex3f(auxCurve[i][0], auxCurve[i][1], auxCurve[i][2]);
+		}
+		glEnd();
+	}
+
 	// possibly draw the axes:
 	if( AxesOn != 0 )
 	{
@@ -412,6 +509,9 @@ void InitGlui(void)
 
 	//View
 	Glui->add_checkbox("Perspective", &Perspective);
+
+	//Control Points
+	Glui->add_checkbox("Control Points", &ControlPoints);
 
 	Glui->add_statictext("Hue");
 	sliders[HUE].slider = Glui->add_slider(false, GLUI_HSLIDER_FLOAT, &Hue);
@@ -543,6 +643,7 @@ InitGraphics( )
 		fprintf( stderr, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 	#endif
 
+	InitCurves();
 }
 
 
@@ -695,6 +796,7 @@ Reset( )
 	Scale  = 1.0;
 	Xrot = Yrot = 0.;
 	Hue = 0.f;
+	ControlPoints = GLUIFALSE;
 
 	TransXYZ[0] = TransXYZ[1] = TransXYZ[2] = 0.;
 
@@ -956,4 +1058,86 @@ void UpdateGLUI(int id)
 		sliders[HUE].slider->set_slider_val(Hue);
 	}
 	Glui->sync_live();
+}
+
+void InitCurves()
+{
+	Curves[0].p0.x0 = Curves[0].p0.x = -1.5f;
+	Curves[0].p0.y0 = 0.f;
+	Curves[0].p0.z0 = Curves[0].p0.z = -1.5f;
+
+	Curves[0].p1.x0 = Curves[0].p1.x = -.5f;
+	Curves[0].p1.y0 = 0.f;
+	Curves[0].p1.z0 = Curves[0].p1.z = -1.5f;
+
+	Curves[0].p2.x0 = Curves[0].p2.x = .5f;
+	Curves[0].p2.y0 = 0.f;
+	Curves[0].p2.z0 = Curves[0].p2.z = -1.5f;
+
+	Curves[0].p3.x0 = Curves[0].p3.x = 1.5f;
+	Curves[0].p3.y0 = 0.f;
+	Curves[0].p3.z0 = Curves[0].p3.z = -1.5f;
+
+	Curves[1].p0.x0 = Curves[1].p0.x = -1.5f;
+	Curves[1].p0.y0 = 0.f;
+	Curves[1].p0.z0 = Curves[1].p0.z = -.5f;
+
+	Curves[1].p1.x0 = Curves[1].p1.x = -.5f;
+	Curves[1].p1.y0 = 0.f;
+	Curves[1].p1.z0 = Curves[1].p1.z = -.5f;
+
+	Curves[1].p2.x0 = Curves[1].p2.x = .5f;
+	Curves[1].p2.y0 = 0.f;
+	Curves[1].p2.z0 = Curves[1].p2.z = -.5f;
+
+	Curves[1].p3.x0 = Curves[1].p3.x = 1.5f;
+	Curves[1].p3.y0 = 0.f;
+	Curves[1].p3.z0 = Curves[1].p3.z = -.5f;
+
+	Curves[2].p0.x0 = Curves[2].p0.x = -1.5f;
+	Curves[2].p0.y0 = 0.f;
+	Curves[2].p0.z0 = Curves[2].p0.z = .5f;
+
+	Curves[2].p1.x0 = Curves[2].p1.x = -.5f;
+	Curves[2].p1.y0 = 0.f;
+	Curves[2].p1.z0 = Curves[2].p1.z = .5f;
+
+	Curves[2].p2.x0 = Curves[2].p2.x = .5f;
+	Curves[2].p2.y0 = 0.f;
+	Curves[2].p2.z0 = Curves[2].p2.z = .5f;
+
+	Curves[2].p3.x0 = Curves[2].p3.x = 1.5f;
+	Curves[2].p3.y0 = 0.f;
+	Curves[2].p3.z0 = Curves[2].p3.z = .5f;
+
+	Curves[3].p0.x0 = Curves[3].p0.x = -1.5f;
+	Curves[3].p0.y0 = 0.f;
+	Curves[3].p0.z0 = Curves[3].p0.z = 1.5f;
+
+	Curves[3].p1.x0 = Curves[3].p1.x = -.5f;
+	Curves[3].p1.y0 = 0.f;
+	Curves[3].p1.z0 = Curves[3].p1.z = 1.5f;
+
+	Curves[3].p2.x0 = Curves[3].p2.x = .5f;
+	Curves[3].p2.y0 = 0.f;
+	Curves[3].p2.z0 = Curves[3].p2.z = 1.5f;
+
+	Curves[3].p3.x0 = Curves[3].p3.x = 1.5f;
+	Curves[3].p3.y0 = 0.f;
+	Curves[3].p3.z0 = Curves[3].p3.z = 1.5f;
+}
+
+void BezierCurve(float vertexList[NUMPOINTS][3], Curve curve)
+{
+	for (int it = 0; it < NUMPOINTS; it++)
+	{
+		float t = (float)it / (float)NUMPOINTS;
+		float omt = 1.f - t;
+		float x = omt * omt*omt*curve.p0.x + 3.f*t*omt*omt*curve.p1.x + 3.f*t*t*omt*curve.p2.x + t * t*t*curve.p3.x;
+		float y = omt * omt*omt*curve.p0.y + 3.f*t*omt*omt*curve.p1.y + 3.f*t*t*omt*curve.p2.y + t * t*t*curve.p3.y;
+		float z = omt * omt*omt*curve.p0.z + 3.f*t*omt*omt*curve.p1.z + 3.f*t*t*omt*curve.p2.z + t * t*t*curve.p3.z;
+		vertexList[it][0] = x;
+		vertexList[it][1] = y;
+		vertexList[it][2] = z;
+	}
 }
