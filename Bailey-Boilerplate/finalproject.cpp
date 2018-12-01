@@ -397,13 +397,16 @@ Display()
 	float curve2[NUMPOINTS][3];
 	float curve3[NUMPOINTS][3];
 
+	float vertexBuffer[NUMPOINTS * NUMPOINTS][3];
+
 	BezierCurve(curve0, Curves[0]);
 	BezierCurve(curve1, Curves[1]);
 	BezierCurve(curve2, Curves[2]);
 	BezierCurve(curve3, Curves[3]);
 
+	int bufferIndex = 0;
 
-	//Display surface vertices
+	//Fill vertex array
 	for (int i = 0; i < NUMPOINTS; i++)
 	{
 		Curve aux;
@@ -427,13 +430,22 @@ Display()
 		
 		BezierCurve(auxCurve, aux);
 
-		glBegin(GL_POINTS);
-		for (int i = 0; i < NUMPOINTS; i++)
+		for (int k = 0; k < NUMPOINTS; k++)
 		{
-			glVertex3f(auxCurve[i][0], auxCurve[i][1], auxCurve[i][2]);
+			vertexBuffer[bufferIndex][0] = auxCurve[k][0];
+			vertexBuffer[bufferIndex][1] = auxCurve[k][1];
+			vertexBuffer[bufferIndex][2] = auxCurve[k][2];
+			bufferIndex++;
 		}
-		glEnd();
 	}
+
+	//Display all vertices
+	glBegin(GL_POINTS);
+	for (int i = 0; i < NUMPOINTS * NUMPOINTS; i++)
+	{
+		glVertex3f(vertexBuffer[i][0], vertexBuffer[i][1], vertexBuffer[i][2]);
+	}
+	glEnd();
 
 	// possibly draw the axes:
 	if( AxesOn != 0 )
