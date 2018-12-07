@@ -13,12 +13,11 @@
 
 #include <GL/gl.h>
 #include <GL/glu.h>
-#include "freeglut.h"
-#include "glui.h"
+#include "glut.h"
 
 // title of these windows:
 
-const char *WINDOWTITLE = { "OpenGL - Boilerplate" };
+const char *WINDOWTITLE = { "Project 6 - Animated Bezier Curves" };
 const char *GLUITITLE   = { "User Interface Window" };
 
 
@@ -43,13 +42,6 @@ const int INIT_WINDOW_SIZE = { 600 };
 const float ANGFACT = { 1. };
 const float SCLFACT = { 0.005f };
 
-// able to use the left mouse for either rotation or scaling,
-// in case have only a 2-button mouse:
-enum LeftButton
-{
-	ROTATE,
-	SCALE
-};
 
 // minimum allowable scale factor:
 
@@ -60,13 +52,42 @@ const float MINSCALE = { 0.05f };
 
 const int LEFT   = { 4 };
 const int MIDDLE = { 2 };
-const int RIGHT  = { 1 };
+const int RIGHT = { 1 };
+
+//Bezier Curve stuff
+
+const int NUMCURVES = 100;
+const int NUMPOINTS = 100;
+
+struct Point
+{
+	float x0, y0, z0;       // initial coordinates
+	float x, y, z;        // animated coordinates
+};
+
+struct Curve
+{
+	float r, g, b;
+	Point p0, p1, p2, p3;
+};
+
+Curve Curves[NUMCURVES];		// if you are creating a pattern of curves
+Curve Stem;				// if you are not
+
+
+// which projection:
+
+enum Projections
+{
+	ORTHO,
+	PERSP
+};
+
 
 // which button:
 
 enum ButtonVals
 {
-	PLAY,
 	RESET,
 	QUIT
 };
@@ -81,6 +102,60 @@ const GLfloat BACKCOLOR[ ] = { 0., 0., 0., 1. };
 
 const GLfloat AXES_WIDTH   = { 3. };
 
+
+// the color numbers:
+// this order must match the radio button order
+
+enum Colors
+{
+	RED,
+	YELLOW,
+	GREEN,
+	CYAN,
+	BLUE,
+	MAGENTA,
+	WHITE,
+	BLACK
+};
+
+char * ColorNames[ ] =
+{
+	"Red",
+	"Yellow",
+	"Green",
+	"Cyan",
+	"Blue",
+	"Magenta",
+	"White",
+	"Black"
+};
+
+
+// the color definitions:
+// this order must match the menu order
+
+const GLfloat Colors[ ][3] = 
+{
+	{ 1., 0., 0. },		// red
+	{ 1., 1., 0. },		// yellow
+	{ 0., 1., 0. },		// green
+	{ 0., 1., 1. },		// cyan
+	{ 0., 0., 1. },		// blue
+	{ 1., 0., 1. },		// magenta
+	{ 1., 1., 1. },		// white
+	{ 0., 0., 0. },		// black
+};
+
+
+// fog parameters:
+
+const GLfloat FOGCOLOR[4] = { .0, .0, .0, 1. };
+const GLenum  FOGMODE     = { GL_LINEAR };
+const GLfloat FOGDENSITY  = { 0.30f };
+const GLfloat FOGSTART    = { 1.5 };
+const GLfloat FOGEND      = { 4. };
+
+
 // non-constant global variables:
 
 int		ActiveButton;			// current button that is down
@@ -89,49 +164,37 @@ int		AxesOn;					// != 0 means to draw the axes
 int		DebugOn;				// != 0 means to print debugging info
 int		DepthCueOn;				// != 0 means to use intensity depth cueing
 int		DepthBufferOn;			// != 0 means to use the z-buffer
+int		ControlPointsOn;
+int		ControlLinesOn;
 int		MainWindow;				// window id for main graphics window
-float	Scale, Scale2;			// scaling factor
-int		Perspective;			// ORTHO or PERSP
+float	Scale;					// scaling factor
+int		WhichColor;				// index into Colors[ ]
+int		WhichProjection;		// ORTHO or PERSP
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
-float	Hue;					// Value for color of surface
-
-//Animation
-int		animate_start_time;
-int		time_frozen;
 float	Time;
-bool	Play;
-
-//GLUI globals
-GLUI *	Glui;				// instance of glui window
-int	GluiWindow;				// the glut id for the glui window
-GLfloat	RotMatrix[4][4];	// set by glui rotation widget
-float	TransXYZ[3];		// set by glui translation widgets
-
-//Structure to hold all the information needed for a slider on the GLUI panel
-struct GLUI_SliderPackage
-{
-	GLUI_HSlider* slider;
-	GLUI_EditText* edit_text;
-
-};
-
-//Slider identifiers
-enum SliderVals {
-	HUE
-};
-
-struct GLUI_SliderPackage sliders[1];
+bool	Freeze;
+float	DeltaAngle;
 
 // function prototypes:
 
 void	Animate( );
-void	Buttons(int);
 void	Display( );
+void	DoAxesMenu( int );
+void	DoColorMenu( int );
+void	DoDepthBufferMenu( int );
+void	DoDepthMenu( int );
+void	DoDebugMenu( int );
+void	DoMainMenu( int );
+void	DoProjectMenu( int );
+void	DoRasterString( float, float, float, char * );
+void	DoStrokeString( float, float, float, float, char * );
+void	DoControlPoints(int);
+void	DoControlLines(int);
 float	ElapsedSeconds( );
-void	InitGlui();
 void	InitGraphics( );
 void	InitLists( );
+void	InitMenus( );
 void	Keyboard( unsigned char, int, int );
 void	MouseButton( int, int, int, int );
 void	MouseMotion( int, int );
@@ -141,7 +204,6 @@ void	Visibility( int );
 
 void	Axes( float );
 void	HsvRgb( float[3], float [3] );
-void	UpdateGLUI(int);
 
 // main program:
 
@@ -173,7 +235,7 @@ main( int argc, char *argv[ ] )
 
 	// setup all the user interface stuff:
 
-	InitGlui( );
+	InitMenus( );
 
 
 	// draw the scene once and wait for some interaction:
@@ -199,67 +261,19 @@ main( int argc, char *argv[ ] )
 void
 Animate( )
 {
-	float seconds = ((float)(glutGet(GLUT_ELAPSED_TIME) - animate_start_time) / 1000.f);
-	float dt = seconds - Time;
-	Time = seconds;
+	int ms = glutGet(GLUT_ELAPSED_TIME);
+	Time = (float)ms / (float)1000;		// [0.,1.)
 
-	Glui->sync_live();
 	glutSetWindow( MainWindow );
 	glutPostRedisplay( );
 }
 
-void Buttons(int id)
-{
-	switch (id)
-	{
-	case PLAY:
-		Play = !Play;
-		if (!Play)
-		{
-			time_frozen = glutGet(GLUT_ELAPSED_TIME) - animate_start_time;
-			GLUI_Master.set_glutIdleFunc(NULL);
-		}
-		else
-		{
-			animate_start_time = glutGet(GLUT_ELAPSED_TIME) - time_frozen;
-			GLUI_Master.set_glutIdleFunc(Animate);
-		}
-		break;
-
-	case RESET:
-		Reset();
-		UpdateGLUI(-1);
-		Glui->sync_live();
-		glutSetWindow(MainWindow);
-		glutPostRedisplay();
-		break;
-
-	case QUIT:
-		// gracefully close the glui window:
-		// gracefully close out the graphics:
-		// gracefully close the graphics window:
-		// gracefully exit the program:
-
-		Glui->close();
-		glutSetWindow(MainWindow);
-		glFinish();
-		glutDestroyWindow(MainWindow);
-		exit(0);
-		break;
-
-	default:
-		fprintf(stderr, "Don't know what to do with Button ID %d\n", id);
-	}
-
-}
 
 // draw the complete scene:
 
 void
 Display( )
 {
-	
-
 	if( DebugOn != 0 )
 	{
 		fprintf( stderr, "Display\n" );
@@ -304,10 +318,13 @@ Display( )
 
 	glMatrixMode( GL_PROJECTION );
 	glLoadIdentity( );
-	if( !Perspective )
+	if( WhichProjection == ORTHO )
 		glOrtho( -3., 3.,     -3., 3.,     0.1, 1000. );
 	else
 		gluPerspective( 90., 1.,	0.1, 1000. );
+
+
+	// place the objects into the scene:
 
 	glMatrixMode( GL_MODELVIEW );
 	glLoadIdentity( );
@@ -320,28 +337,107 @@ Display( )
 
 	// rotate the scene:
 
-	glTranslatef((GLfloat)TransXYZ[0], (GLfloat)TransXYZ[1], -(GLfloat)TransXYZ[2]);
-	glRotatef((GLfloat)Yrot, 0., 1., 0.);
-	glRotatef((GLfloat)Xrot, 1., 0., 0.);
-	glMultMatrixf((const GLfloat *)RotMatrix);
-	glScalef((GLfloat)Scale, (GLfloat)Scale, (GLfloat)Scale);
-	GLfloat scale2 = 1. + Scale2;
-	if (scale2 < MINSCALE)
-		scale2 = MINSCALE;
-	glScalef((GLfloat)scale2, (GLfloat)scale2, (GLfloat)scale2);
+	glRotatef( (GLfloat)Yrot, 0., 1., 0. );
+	glRotatef( (GLfloat)Xrot, 1., 0., 0. );
 
-	//Get some color!
-	float rgb[3];
-	float hsv[3] = { Hue, 1.f, 1.f };
-	HsvRgb(hsv, rgb);
-	glColor3f(rgb[0], rgb[1], rgb[2]);
 
-	// place the objects into the scene here ----------------------------------------------------------
-	
+	// uniformly scale the scene:
+
+	if( Scale < MINSCALE )
+		Scale = MINSCALE;
+	glScalef( (GLfloat)Scale, (GLfloat)Scale, (GLfloat)Scale );
+
+
+	// set the fog parameters:
+
+	if( DepthCueOn != 0 )
+	{
+		glFogi( GL_FOG_MODE, FOGMODE );
+		glFogfv( GL_FOG_COLOR, FOGCOLOR );
+		glFogf( GL_FOG_DENSITY, FOGDENSITY );
+		glFogf( GL_FOG_START, FOGSTART );
+		glFogf( GL_FOG_END, FOGEND );
+		glEnable( GL_FOG );
+	}
+	else
+	{
+		glDisable( GL_FOG );
+	}
+
+	//Draw the Bezier curves
+
+	for (float angle = 0.f; angle <= 360.f; angle += DeltaAngle)
+	{
+		glLineWidth(3.f);
+		float hsv[3] = {angle, 1.f, 1.f};
+		float rgb[3];
+		HsvRgb(hsv, rgb);
+		glPushMatrix();
+		glRotatef(angle, 0.f, 1.f, 0.f);
+		glColor3f(rgb[0], rgb[1], rgb[2]);
+		glBegin(GL_LINE_STRIP);
+		for (int it = 0; it <= NUMPOINTS; it++)
+		{
+			//Transformations
+			Stem.p0.x = Stem.p0.x0;
+			Stem.p0.y = Stem.p0.y0 * sin(Time);
+			Stem.p0.z = Stem.p0.z0;
+
+			Stem.p1.x = Stem.p1.x0 * cos(Time);
+			Stem.p1.y = Stem.p1.y0;
+			Stem.p1.z = Stem.p1.z0;
+
+			Stem.p2.x = Stem.p2.x0 * cos(Time);
+			Stem.p2.y = Stem.p2.y0;
+			Stem.p2.z = Stem.p2.z0;
+
+			Stem.p3.x = Stem.p3.x0;
+			Stem.p3.y = Stem.p3.y0 * sin(Time);
+			Stem.p3.z = Stem.p3.z0;
+
+			float t = (float)it / (float)NUMPOINTS;
+			float omt = 1.f - t;
+			float x = omt * omt*omt*Stem.p0.x + 3.f*t*omt*omt*Stem.p1.x + 3.f*t*t*omt*Stem.p2.x + t * t*t*Stem.p3.x;
+			float y = omt * omt*omt*Stem.p0.y + 3.f*t*omt*omt*Stem.p1.y + 3.f*t*t*omt*Stem.p2.y + t * t*t*Stem.p3.y;
+			float z = omt * omt*omt*Stem.p0.z + 3.f*t*omt*omt*Stem.p1.z + 3.f*t*t*omt*Stem.p2.z + t * t*t*Stem.p3.z;
+			glVertex3f(x, y, z);
+		}
+		glEnd();
+
+		//Draw control points
+		if (ControlPointsOn)
+		{
+			glPointSize(6.f);
+			glBegin(GL_POINTS);
+			glVertex3f(Stem.p0.x, Stem.p0.y, Stem.p0.z);
+			glVertex3f(Stem.p1.x, Stem.p1.y, Stem.p1.z);
+			glVertex3f(Stem.p2.x, Stem.p2.y, Stem.p2.z);
+			glVertex3f(Stem.p3.x, Stem.p3.y, Stem.p3.z);
+			glEnd();
+		}
+
+		//Draw lines between control points
+		if (ControlLinesOn)
+		{
+			glLineWidth(1.f);
+			glColor3f(1.f, 1.f, 1.f);
+			glBegin(GL_LINE_STRIP);
+			glVertex3f(Stem.p0.x, Stem.p0.y, Stem.p0.z);
+			glVertex3f(Stem.p1.x, Stem.p1.y, Stem.p1.z);
+			glVertex3f(Stem.p2.x, Stem.p2.y, Stem.p2.z);
+			glVertex3f(Stem.p3.x, Stem.p3.y, Stem.p3.z);
+			glEnd();
+		}
+
+		glPopMatrix();
+	}
+
+
 	// possibly draw the axes:
+
 	if( AxesOn != 0 )
 	{
-		glColor3f(1.f, 1.f, 1.f);
+		glColor3fv( &Colors[WhichColor][0] );
 		glCallList( AxesList );
 	}
 
@@ -374,6 +470,143 @@ Display( )
 	glFlush( );
 }
 
+
+void
+DoAxesMenu( int id )
+{
+	AxesOn = id;
+
+	glutSetWindow( MainWindow );
+	glutPostRedisplay( );
+}
+
+
+void
+DoColorMenu( int id )
+{
+	WhichColor = id - RED;
+
+	glutSetWindow( MainWindow );
+	glutPostRedisplay( );
+}
+
+
+void
+DoDebugMenu( int id )
+{
+	DebugOn = id;
+
+	glutSetWindow( MainWindow );
+	glutPostRedisplay( );
+}
+
+
+void
+DoDepthBufferMenu( int id )
+{
+	DepthBufferOn = id;
+
+	glutSetWindow( MainWindow );
+	glutPostRedisplay( );
+}
+
+void
+DoDepthMenu( int id )
+{
+	DepthCueOn = id;
+
+	glutSetWindow( MainWindow );
+	glutPostRedisplay( );
+}
+
+
+// main menu callback:
+
+void
+DoMainMenu( int id )
+{
+	switch( id )
+	{
+		case RESET:
+			Reset( );
+			break;
+
+		case QUIT:
+			// gracefully close out the graphics:
+			// gracefully close the graphics window:
+			// gracefully exit the program:
+			glutSetWindow( MainWindow );
+			glFinish( );
+			glutDestroyWindow( MainWindow );
+			exit( 0 );
+			break;
+
+		default:
+			fprintf( stderr, "Don't know what to do with Main Menu ID %d\n", id );
+	}
+
+	glutSetWindow( MainWindow );
+	glutPostRedisplay( );
+}
+
+
+void
+DoProjectMenu( int id )
+{
+	WhichProjection = id;
+
+	glutSetWindow( MainWindow );
+	glutPostRedisplay( );
+}
+
+
+// use glut to display a string of characters using a raster font:
+
+void
+DoRasterString( float x, float y, float z, char *s )
+{
+	glRasterPos3f( (GLfloat)x, (GLfloat)y, (GLfloat)z );
+
+	char c;			// one character to print
+	for( ; ( c = *s ) != '\0'; s++ )
+	{
+		glutBitmapCharacter( GLUT_BITMAP_TIMES_ROMAN_24, c );
+	}
+}
+
+
+// use glut to display a string of characters using a stroke font:
+
+void
+DoStrokeString( float x, float y, float z, float ht, char *s )
+{
+	glPushMatrix( );
+		glTranslatef( (GLfloat)x, (GLfloat)y, (GLfloat)z );
+		float sf = ht / ( 119.05f + 33.33f );
+		glScalef( (GLfloat)sf, (GLfloat)sf, (GLfloat)sf );
+		char c;			// one character to print
+		for( ; ( c = *s ) != '\0'; s++ )
+		{
+			glutStrokeCharacter( GLUT_STROKE_ROMAN, c );
+		}
+	glPopMatrix( );
+}
+
+void DoControlPoints(int id)
+{
+	ControlPointsOn = id;
+
+	glutSetWindow(MainWindow);
+	glutPostRedisplay();
+}
+void DoControlLines(int id)
+{
+	ControlLinesOn = id;
+
+	glutSetWindow(MainWindow);
+	glutPostRedisplay();
+}
+
 // return the number of seconds since the start of the program:
 
 float
@@ -389,77 +622,63 @@ ElapsedSeconds( )
 }
 
 
-void InitGlui(void)
+// initialize the glui window:
+
+void
+InitMenus( )
 {
-	GLUI_Panel *panel;
-	GLUI_Translation *trans, *scale;
-	GLUI_Rotation *rot;
+	glutSetWindow( MainWindow );
 
-	// setup the glui window:
+	int numColors = sizeof( Colors ) / ( 3*sizeof(int) );
+	int colormenu = glutCreateMenu( DoColorMenu );
+	for( int i = 0; i < numColors; i++ )
+	{
+		glutAddMenuEntry( ColorNames[i], i );
+	}
 
-	glutInitWindowPosition(INIT_WINDOW_SIZE + 50, 0);
-	Glui = GLUI_Master.create_glui((char *)GLUITITLE);
+	int axesmenu = glutCreateMenu( DoAxesMenu );
+	glutAddMenuEntry( "Off",  0 );
+	glutAddMenuEntry( "On",   1 );
 
+	int controlpointsmenu = glutCreateMenu(DoControlPoints);
+	glutAddMenuEntry("Off", 0);
+	glutAddMenuEntry("On", 1);
 
-	Glui->add_statictext((char *)GLUITITLE);
-	Glui->add_separator();
+	int controllinesmenu = glutCreateMenu(DoControlLines);
+	glutAddMenuEntry("Off", 0);
+	glutAddMenuEntry("On", 1);
 
-	//Axes
-	Glui->add_checkbox("Axes", &AxesOn);
+	int depthcuemenu = glutCreateMenu( DoDepthMenu );
+	glutAddMenuEntry( "Off",  0 );
+	glutAddMenuEntry( "On",   1 );
 
-	//Debug
-	Glui->add_checkbox("Debug", &DebugOn);
+	int depthbuffermenu = glutCreateMenu( DoDepthBufferMenu );
+	glutAddMenuEntry( "Off",  0 );
+	glutAddMenuEntry( "On",   1 );
 
-	//View
-	Glui->add_checkbox("Perspective", &Perspective);
+	int debugmenu = glutCreateMenu( DoDebugMenu );
+	glutAddMenuEntry( "Off",  0 );
+	glutAddMenuEntry( "On",   1 );
 
-	Glui->add_statictext("Hue");
-	sliders[HUE].slider = Glui->add_slider(false, GLUI_HSLIDER_FLOAT, &Hue);
-	sliders[HUE].slider->set_float_limits(0.f, 360.f);
-	sliders[HUE].slider->set_w(200);
-	sliders[HUE].slider->set_slider_val(Hue);
-	sliders[HUE].edit_text = Glui->add_edittext("", GLUI_EDITTEXT_FLOAT, &Hue, HUE, (GLUI_Update_CB)UpdateGLUI);
-	Glui->add_separator();
+	int projmenu = glutCreateMenu( DoProjectMenu );
+	glutAddMenuEntry( "Orthographic",  ORTHO );
+	glutAddMenuEntry( "Perspective",   PERSP );
 
-	panel = Glui->add_panel("Scene Transformation");
+	int mainmenu = glutCreateMenu( DoMainMenu );
+	glutAddSubMenu(   "Axes",          axesmenu);
+	glutAddSubMenu(   "Colors",        colormenu);
+	glutAddSubMenu("Control Points", controlpointsmenu);
+	glutAddSubMenu("Control Lines", controllinesmenu);
+	glutAddSubMenu(   "Depth Buffer",  depthbuffermenu);
+	glutAddSubMenu(   "Depth Cue",     depthcuemenu);
+	glutAddSubMenu(   "Projection",    projmenu );
+	glutAddMenuEntry( "Reset",         RESET );
+	glutAddSubMenu(   "Debug",         debugmenu);
+	glutAddMenuEntry( "Quit",          QUIT );
 
-	rot = Glui->add_rotation_to_panel(panel, "Rotation", (float *)RotMatrix);
+// attach the pop-up menu to the right mouse button:
 
-	rot->set_spin(1.0);
-
-	Glui->add_column_to_panel(panel, GLUIFALSE);
-	scale = Glui->add_translation_to_panel(panel, "Zoom", GLUI_TRANSLATION_Y, &Scale2);
-	scale->set_speed(0.01f);
-
-	Glui->add_column_to_panel(panel, GLUIFALSE);
-	trans = Glui->add_translation_to_panel(panel, "Trans XY", GLUI_TRANSLATION_XY, &TransXYZ[0]);
-	trans->set_speed(1.1f);
-
-	Glui->add_column_to_panel(panel, FALSE);
-	trans = Glui->add_translation_to_panel(panel, "Trans Z", GLUI_TRANSLATION_Z, &TransXYZ[2]);
-	trans->set_speed(1.1f);
-
-	panel = Glui->add_panel("", FALSE);
-
-	Glui->add_button_to_panel(panel, "Play / Pause", PLAY, (GLUI_Update_CB)Buttons);
-
-	Glui->add_column_to_panel(panel, FALSE);
-
-	Glui->add_button_to_panel(panel, "Reset", RESET, (GLUI_Update_CB)Buttons);
-
-	Glui->add_column_to_panel(panel, FALSE);
-
-	Glui->add_button_to_panel(panel, "Quit", QUIT, (GLUI_Update_CB)Buttons);
-
-
-	// tell glui what graphics window it needs to post a redisplay to:
-
-	Glui->set_main_gfx_window(MainWindow);
-
-
-	// set the graphics window's idle function:
-
-	GLUI_Master.set_glutIdleFunc(Animate);
+	glutAttachMenu( GLUT_RIGHT_BUTTON );
 }
 
 
@@ -529,20 +748,39 @@ InitGraphics( )
 	glutTabletButtonFunc( NULL );
 	glutMenuStateFunc( NULL );
 	glutTimerFunc( -1, NULL, 0 );
+	glutIdleFunc( Animate );
 
 	// init glew (a window must be open to do this):
 
-	#ifdef WIN32
-		GLenum err = glewInit( );
-		if( err != GLEW_OK )
-		{
-			fprintf( stderr, "glewInit Error\n" );
-		}
-		else
-			fprintf( stderr, "GLEW initialized OK\n" );
-		fprintf( stderr, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
-	#endif
+#ifdef WIN32
+	GLenum err = glewInit( );
+	if( err != GLEW_OK )
+	{
+		fprintf( stderr, "glewInit Error\n" );
+	}
+	else
+		fprintf( stderr, "GLEW initialized OK\n" );
+	fprintf( stderr, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
+#endif
 
+	//Set up the bezier curve
+	Stem.p0.x0 = 0.f;
+	Stem.p0.y0 = -1.f;
+	Stem.p0.z0 = 0.f;
+
+	Stem.p1.x0 = 1.f;
+	Stem.p1.y0 = -.5f;
+	Stem.p1.z0 = 0.f;
+
+	Stem.p2.x0 = 1.f;
+	Stem.p2.y0 = .5f;
+	Stem.p2.z0 = 0.f;
+
+	Stem.p3.x0 = 0.f;
+	Stem.p3.y0 = 1.f;
+	Stem.p3.z0 = 0.f;
+
+	DeltaAngle = 360.f / (float)NUMCURVES;
 }
 
 
@@ -554,7 +792,8 @@ InitGraphics( )
 void
 InitLists( )
 {
-	//Create the axes:
+	// create the axes:
+
 	AxesList = glGenLists( 1 );
 	glNewList( AxesList, GL_COMPILE );
 		glLineWidth( AXES_WIDTH );
@@ -565,37 +804,47 @@ InitLists( )
 
 
 // the keyboard callback:
-void Keyboard(unsigned char c, int x, int y)
+
+void
+Keyboard( unsigned char c, int x, int y )
 {
-	if (DebugOn != 0)
-		fprintf(stderr, "Keyboard: '%c' (0x%0x)\n", c, c);
+	if( DebugOn != 0 )
+		fprintf( stderr, "Keyboard: '%c' (0x%0x)\n", c, c );
 
-	switch (c)
+	switch( c )
 	{
-	case 'r':
-	case 'R':
-		Buttons(RESET);
-		break;
-	case 'q':
-	case 'Q':
-	case ESCAPE:
-		Buttons(QUIT);	// will not return here
-		break;				// happy compiler
-	case 'p':
-	case 'P':
-		Buttons(PLAY);
-		break;
+		case 'f':
+			Freeze = !Freeze;
+			if (Freeze)
+				glutIdleFunc(NULL);
+			else
+				glutIdleFunc(Animate);
+			break;
 
-	default:
-		fprintf(stderr, "Don't know what to do with keyboard hit: '%c' (0x%0x)\n", c, c);
+		case 'o':
+		case 'O':
+			WhichProjection = ORTHO;
+			break;
+
+		case 'p':
+		case 'P':
+			WhichProjection = PERSP;
+			break;
+
+		case 'q':
+		case 'Q':
+		case ESCAPE:
+			DoMainMenu( QUIT );	// will not return here
+			break;				// happy compiler
+
+		default:
+			fprintf( stderr, "Don't know what to do with keyboard hit: '%c' (0x%0x)\n", c, c );
 	}
 
-	// synchronize the GLUI display with the variables:
-	Glui->sync_live();
-
 	// force a call to Display( ):
-	glutSetWindow(MainWindow);
-	glutPostRedisplay();
+
+	glutSetWindow( MainWindow );
+	glutPostRedisplay( );
 }
 
 
@@ -689,26 +938,17 @@ void
 Reset( )
 {
 	ActiveButton = 0;
-	AxesOn = GLUITRUE;
-	DebugOn = GLUIFALSE;
-	Perspective = GLUITRUE;
+	AxesOn = 1;
+	DebugOn = 0;
+	DepthBufferOn = 1;
+	DepthCueOn = 0;
 	Scale  = 1.0;
+	WhichColor = WHITE;
+	WhichProjection = PERSP;
 	Xrot = Yrot = 0.;
-	Hue = 0.f;
-
-	TransXYZ[0] = TransXYZ[1] = TransXYZ[2] = 0.;
-
-	RotMatrix[0][1] = RotMatrix[0][2] = RotMatrix[0][3] = 0.;
-	RotMatrix[1][0] = RotMatrix[1][2] = RotMatrix[1][3] = 0.;
-	RotMatrix[2][0] = RotMatrix[2][1] = RotMatrix[2][3] = 0.;
-	RotMatrix[3][0] = RotMatrix[3][1] = RotMatrix[3][3] = 0.;
-	RotMatrix[0][0] = RotMatrix[1][1] = RotMatrix[2][2] = RotMatrix[3][3] = 1.;
-
-	Time = 0.f;
-	Play = true;
-
-	animate_start_time = glutGet(GLUT_ELAPSED_TIME);
-	time_frozen = 0;
+	ControlPointsOn = 0;
+	ControlLinesOn = 0;
+	Freeze = false;
 }
 
 
@@ -943,17 +1183,4 @@ HsvRgb( float hsv[3], float rgb[3] )
 	rgb[0] = r;
 	rgb[1] = g;
 	rgb[2] = b;
-}
-
-void UpdateGLUI(int id)
-{
-	switch (id)
-	{
-	case HUE:
-		sliders[HUE].slider->set_slider_val(Hue);
-		break;
-	default:
-		sliders[HUE].slider->set_slider_val(Hue);
-	}
-	Glui->sync_live();
 }

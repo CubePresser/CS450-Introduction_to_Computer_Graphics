@@ -18,7 +18,7 @@
 
 // title of these windows:
 
-const char *WINDOWTITLE = { "OpenGL - Boilerplate" };
+const char *WINDOWTITLE = { "CS450 Final Project - Jonathan Jones" };
 const char *GLUITITLE   = { "User Interface Window" };
 
 
@@ -31,6 +31,7 @@ const int GLUIFALSE = { false };
 // the escape key:
 
 #define ESCAPE		0x1b
+#define NUMPOINTS   100
 
 
 // initial window size:
@@ -87,8 +88,11 @@ int		ActiveButton;			// current button that is down
 GLuint	AxesList;				// list to hold the axes
 int		AxesOn;					// != 0 means to draw the axes
 int		DebugOn;				// != 0 means to print debugging info
-int		DepthCueOn;				// != 0 means to use intensity depth cueing
-int		DepthBufferOn;			// != 0 means to use the z-buffer
+int		ControlPoints;			// Bezier Surface control points
+int		Vertices;				// Bezier Surface vertices
+int		Surface;				// Bezier Surface surface
+int		Normals;				// Bezier Surface normals
+int		ControlSphere;			// Basic glut object to compare against
 int		MainWindow;				// window id for main graphics window
 float	Scale, Scale2;			// scaling factor
 int		Perspective;			// ORTHO or PERSP
@@ -96,11 +100,58 @@ int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
 float	Hue;					// Value for color of surface
 
+//Bezier curves
+
+struct Point
+{
+	GLfloat x, y, z;
+};
+
+struct Curve
+{
+	float r, g, b;
+	Point p0, p1, p2, p3;
+};
+
+struct Triangle
+{
+	Point *p0, *p1, *p2;
+	Point normal; //Surface normal
+};
+
+Curve Curves[4];
+
 //Animation
 int		animate_start_time;
 int		time_frozen;
 float	Time;
 bool	Play;
+
+//Lighting
+float
+White[] = { 1.,1.,1.,1. };
+// utility to create an array from 3 separate values:
+float *
+Array3(float a, float b, float c)
+{
+	static float array[4];
+	array[0] = a;
+	array[1] = b;
+	array[2] = c;
+	array[3] = 1.;
+	return array;
+}
+// utility to create an array from a multiplier and an array:
+float *
+MulArray3(float factor, float array0[3])
+{
+	static float array[4];
+	array[0] = factor * array0[0];
+	array[1] = factor * array0[1];
+	array[2] = factor * array0[2];
+	array[3] = 1.;
+	return array;
+}
 
 //GLUI globals
 GLUI *	Glui;				// instance of glui window
@@ -142,6 +193,15 @@ void	Visibility( int );
 void	Axes( float );
 void	HsvRgb( float[3], float [3] );
 void	UpdateGLUI(int);
+void	InitCurves();
+void	BezierCurve(Point[NUMPOINTS], Curve); //Returns a list of vertices in a bezier curve
+Point	SurfaceNormal(Point*, Point*, Point*);
+
+//Lighting
+void	SetShinyMaterial(float, float, float, float);
+void	SetDullMaterial(float, float, float);
+void	SetPointLight(int, float, float, float, float, float, float);
+void	SetSpotLight(int, float, float, float, float, float, float, float, float, float);
 
 // main program:
 
@@ -256,45 +316,41 @@ void Buttons(int id)
 // draw the complete scene:
 
 void
-Display( )
+Display()
 {
-	
 
-	if( DebugOn != 0 )
+
+	if (DebugOn != 0)
 	{
-		fprintf( stderr, "Display\n" );
+		fprintf(stderr, "Display\n");
 	}
 
 
 	// set which window we want to do the graphics into:
 
-	glutSetWindow( MainWindow );
+	glutSetWindow(MainWindow);
 
 
 	// erase the background:
 
-	glDrawBuffer( GL_BACK );
-	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+	glDrawBuffer(GL_BACK);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	if( DepthBufferOn != 0 )
-		glEnable( GL_DEPTH_TEST );
-	else
-		glDisable( GL_DEPTH_TEST );
-
+	glEnable(GL_DEPTH_TEST);
 
 	// specify shading to be flat:
 
-	glShadeModel( GL_SMOOTH );
+	glShadeModel(GL_FLAT);
 
 
 	// set the viewport to a square centered in the window:
 
-	GLsizei vx = glutGet( GLUT_WINDOW_WIDTH );
-	GLsizei vy = glutGet( GLUT_WINDOW_HEIGHT );
+	GLsizei vx = glutGet(GLUT_WINDOW_WIDTH);
+	GLsizei vy = glutGet(GLUT_WINDOW_HEIGHT);
 	GLsizei v = vx < vy ? vx : vy;			// minimum dimension
-	GLint xl = ( vx - v ) / 2;
-	GLint yb = ( vy - v ) / 2;
-	glViewport( xl, yb,  v, v );
+	GLint xl = (vx - v) / 2;
+	GLint yb = (vy - v) / 2;
+	glViewport(xl, yb, v, v);
 
 
 	// set the viewing volume:
@@ -302,20 +358,20 @@ Display( )
 	// given as DISTANCES IN FRONT OF THE EYE
 	// USE gluOrtho2D( ) IF YOU ARE DOING 2D !
 
-	glMatrixMode( GL_PROJECTION );
-	glLoadIdentity( );
-	if( !Perspective )
-		glOrtho( -3., 3.,     -3., 3.,     0.1, 1000. );
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	if (!Perspective)
+		glOrtho(-3., 3., -3., 3., 0.1, 1000.);
 	else
-		gluPerspective( 90., 1.,	0.1, 1000. );
+		gluPerspective(90., 1., 0.1, 1000.);
 
-	glMatrixMode( GL_MODELVIEW );
-	glLoadIdentity( );
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
 
 
 	// set the eye position, look-at position, and up-vector:
 
-	gluLookAt( 0., 0., 3.,     0., 0., 0.,     0., 1., 0. );
+	gluLookAt(0., 0., 3., 0., 0., 0., 0., 1., 0.);
 
 
 	// rotate the scene:
@@ -337,7 +393,192 @@ Display( )
 	glColor3f(rgb[0], rgb[1], rgb[2]);
 
 	// place the objects into the scene here ----------------------------------------------------------
-	
+
+	double delta = sin(Time) * 3.f;
+
+	//Animate control points
+	Curves[0].p0.y = 0.f;
+	Curves[0].p1.y = (sin(Time) * 3.f) * .25f;
+	Curves[0].p2.y = (sin(Time * 2.f) * 3.f) * .5f;
+	Curves[0].p3.y = 0.f;
+
+	Curves[1].p0.y = (sin(Time * 1.2) * 3.f) * .25f;
+	Curves[1].p1.y = (sin(Time) * 3.f) * .5f;
+	Curves[1].p2.y = (sin(Time * 1.5) * 3.f) * .75f;
+	Curves[1].p3.y = (sin(Time * 3.f) * 3.f) * .5f;
+
+	Curves[2].p0.y = (sin(Time * 2.2f) * 3.f) * .5f;
+	Curves[2].p1.y = (sin(Time * 1.1f) * 3.f) * .75f;
+	Curves[2].p2.y = (sin(Time * 0.4f) * 3.f) * .5f;
+	Curves[2].p3.y = (sin(Time) * 3.f) * .25f;
+
+	Curves[3].p0.y = 0.f;
+	Curves[3].p1.y = (sin(Time) * 3.f) * .5f;
+	Curves[3].p2.y = (sin(Time * 3.5f) * 3.f) * .25f;
+	Curves[3].p3.y = 0.f;
+
+	//Display control points
+
+	if (ControlPoints)
+	{
+		glPointSize(5.f);
+		glBegin(GL_POINTS);
+		for (int i = 0; i < 4; i++)
+		{
+			glVertex3f(Curves[i].p0.x, Curves[i].p0.y, Curves[i].p0.z);
+			glVertex3f(Curves[i].p1.x, Curves[i].p1.y, Curves[i].p1.z);
+			glVertex3f(Curves[i].p2.x, Curves[i].p2.y, Curves[i].p2.z);
+			glVertex3f(Curves[i].p3.x, Curves[i].p3.y, Curves[i].p3.z);
+		}
+		glEnd();
+		glPointSize(1.f);
+	}
+
+	//Generate all the vertices in the mesh
+	Point curve0[NUMPOINTS];
+	Point curve1[NUMPOINTS];
+	Point curve2[NUMPOINTS];
+	Point curve3[NUMPOINTS];
+
+	Point vertexBuffer[NUMPOINTS * NUMPOINTS];
+
+	BezierCurve(curve0, Curves[0]);
+	BezierCurve(curve1, Curves[1]);
+	BezierCurve(curve2, Curves[2]);
+	BezierCurve(curve3, Curves[3]);
+
+	int bufferIndex = 0;
+
+	//Fill vertex array
+	for (int i = 0; i < NUMPOINTS; i++)
+	{
+		Curve aux;
+		Point auxCurve[NUMPOINTS];
+
+		aux.p0.x = curve0[i].x;
+		aux.p0.y = curve0[i].y;
+		aux.p0.z = curve0[i].z;
+
+		aux.p1.x = curve1[i].x;
+		aux.p1.y = curve1[i].y;
+		aux.p1.z = curve1[i].z;
+
+		aux.p2.x = curve2[i].x;
+		aux.p2.y = curve2[i].y;
+		aux.p2.z = curve2[i].z;
+
+		aux.p3.x = curve3[i].x;
+		aux.p3.y = curve3[i].y;
+		aux.p3.z = curve3[i].z;
+		
+		BezierCurve(auxCurve, aux);
+
+		for (int k = 0; k < NUMPOINTS; k++)
+		{
+			vertexBuffer[bufferIndex].x = auxCurve[k].x;
+			vertexBuffer[bufferIndex].y = auxCurve[k].y;
+			vertexBuffer[bufferIndex].z = auxCurve[k].z;
+			bufferIndex++;
+		}
+	}
+
+	//Generate list of triangle faces
+	//Use modified euler's formula to calculate number of faces
+	Triangle faces[(2*(NUMPOINTS * NUMPOINTS)) - (4 * NUMPOINTS) + 3]; // f = 2(v^2) - 4v + 3
+	int faceIndex = 0;
+	for (int i = 1; i < NUMPOINTS; i++) //Rows of vertices
+	{
+		for (int k = 0; k < NUMPOINTS - 1; k++) //Columns of vertices
+		{
+			//Get points
+			faces[faceIndex].p0 = &vertexBuffer[(NUMPOINTS * (i - 1)) + k];
+			faces[faceIndex].p1 = &vertexBuffer[(NUMPOINTS * i) + k];
+			faces[faceIndex].p2 = &vertexBuffer[(NUMPOINTS * i) + (k + 1)];
+
+			//Calculate normal
+			faces[faceIndex].normal = SurfaceNormal(faces[faceIndex].p0, faces[faceIndex].p1, faces[faceIndex].p2);
+
+			faceIndex++;
+
+			faces[faceIndex].p0 = &vertexBuffer[(NUMPOINTS * (i - 1)) + k];
+			faces[faceIndex].p1 = &vertexBuffer[(NUMPOINTS * i) + (k + 1)];
+			faces[faceIndex].p2 = &vertexBuffer[(NUMPOINTS * (i - 1)) + (k + 1)];
+
+			//Calculate Normal
+			faces[faceIndex].normal = SurfaceNormal(faces[faceIndex].p0, faces[faceIndex].p1, faces[faceIndex].p2);
+
+			faceIndex++;
+		}
+	}
+	faceIndex--;
+
+	//Draw normals
+	if (Normals)
+	{
+		glColor3f(1.f, 1.f, 1.f);
+		int di = faceIndex;
+		glBegin(GL_LINES);
+		while (di >= 0)
+		{
+			Point scaleNormal = faces[di].normal;
+			scaleNormal.x *= 0.1; scaleNormal.y *= 0.1; scaleNormal.z *= 0.1;
+			glVertex3f(faces[di].p0->x, faces[di].p0->y, faces[di].p0->z);
+			glVertex3f(faces[di].p0->x + scaleNormal.x, faces[di].p0->y + scaleNormal.y, faces[di].p0->z + scaleNormal.z);
+
+			glVertex3f(faces[di].p1->x, faces[di].p1->y, faces[di].p1->z);
+			glVertex3f(faces[di].p1->x + scaleNormal.x, faces[di].p1->y + scaleNormal.y, faces[di].p1->z + scaleNormal.z);
+
+			glVertex3f(faces[di].p2->x, faces[di].p2->y, faces[di].p2->z);
+			glVertex3f(faces[di].p2->x + scaleNormal.x, faces[di].p2->y + scaleNormal.y, faces[di].p2->z + scaleNormal.z);
+
+			di--;
+		}
+		glEnd();
+	}
+
+	//Set up lighting
+	glEnable(GL_LIGHTING);
+	SetPointLight(GL_LIGHT0, 5.f, 3.f, 0.f, .5f, .5f, .5f);
+	glEnable(GL_LIGHT0);
+
+	SetShinyMaterial(rgb[0], rgb[1], rgb[2], 10.f);
+
+	//Draw control sphere
+	if (ControlSphere)
+	{
+		glutSolidSphere(1.0, 100, 100);
+	}
+
+	//Draw the bezier surface faces
+	if (Surface)
+	{
+		glBegin(GL_TRIANGLES);
+		while (faceIndex >= 0)
+		{
+			glNormal3f(faces[faceIndex].normal.x, faces[faceIndex].normal.y, faces[faceIndex].normal.z);
+
+			glVertex3f(faces[faceIndex].p0->x, faces[faceIndex].p0->y, faces[faceIndex].p0->z);
+			glVertex3f(faces[faceIndex].p1->x, faces[faceIndex].p1->y, faces[faceIndex].p1->z);
+			glVertex3f(faces[faceIndex].p2->x, faces[faceIndex].p2->y, faces[faceIndex].p2->z);
+
+			faceIndex--;
+		}
+		glEnd();
+	}
+
+	glDisable(GL_LIGHTING);
+
+	//Display all vertices
+	if (Vertices)
+	{
+		glBegin(GL_POINTS);
+		for (int i = 0; i < NUMPOINTS * NUMPOINTS; i++)
+		{
+			glVertex3f(vertexBuffer[i].x, vertexBuffer[i].y, vertexBuffer[i].z);
+		}
+		glEnd();
+	}
+
 	// possibly draw the axes:
 	if( AxesOn != 0 )
 	{
@@ -410,10 +651,30 @@ void InitGlui(void)
 	//Debug
 	Glui->add_checkbox("Debug", &DebugOn);
 
+	//Control Sphere
+	Glui->add_checkbox("Control Sphere", &ControlSphere);
+
 	//View
 	Glui->add_checkbox("Perspective", &Perspective);
 
-	Glui->add_statictext("Hue");
+	Glui->add_separator();
+	Glui->add_statictext("Bezier Surface Toggles");
+	Glui->add_separator();
+
+	//Control Points
+	Glui->add_checkbox("Control Points", &ControlPoints);
+	
+	//Vertices
+	Glui->add_checkbox("Vertices", &Vertices);
+
+	//Normals
+	Glui->add_checkbox("Normals", &Normals);
+
+	//Surface
+	Glui->add_checkbox("Render Surface", &Surface);
+
+	Glui->add_separator();
+	Glui->add_statictext("Color");
 	sliders[HUE].slider = Glui->add_slider(false, GLUI_HSLIDER_FLOAT, &Hue);
 	sliders[HUE].slider->set_float_limits(0.f, 360.f);
 	sliders[HUE].slider->set_w(200);
@@ -543,6 +804,7 @@ InitGraphics( )
 		fprintf( stderr, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 	#endif
 
+	InitCurves();
 }
 
 
@@ -695,6 +957,11 @@ Reset( )
 	Scale  = 1.0;
 	Xrot = Yrot = 0.;
 	Hue = 0.f;
+	ControlPoints = GLUIFALSE;
+	Vertices = GLUIFALSE;
+	Surface = GLUITRUE;
+	Normals = GLUIFALSE;
+	ControlSphere = GLUIFALSE;
 
 	TransXYZ[0] = TransXYZ[1] = TransXYZ[2] = 0.;
 
@@ -956,4 +1223,165 @@ void UpdateGLUI(int id)
 		sliders[HUE].slider->set_slider_val(Hue);
 	}
 	Glui->sync_live();
+}
+
+//Initialize all the points on control curves
+void InitCurves()
+{
+	Curves[0].p0.x = -1.5f;
+	Curves[0].p0.y = 0.f;
+	Curves[0].p0.z = -1.5f;
+
+	Curves[0].p1.x = -.5f;
+	Curves[0].p1.y = 0.f;
+	Curves[0].p1.z = -1.5f;
+
+	Curves[0].p2.x = .5f;
+	Curves[0].p2.y = 0.f;
+	Curves[0].p2.z = -1.5f;
+
+	Curves[0].p3.x = 1.5f;
+	Curves[0].p3.y = 0.f;
+	Curves[0].p3.z = -1.5f;
+
+	Curves[1].p0.x = -1.5f;
+	Curves[1].p0.y = 0.f;
+	Curves[1].p0.z = -.5f;
+
+	Curves[1].p1.x = -.5f;
+	Curves[1].p1.y = 0.f;
+	Curves[1].p1.z = -.5f;
+
+	Curves[1].p2.x = .5f;
+	Curves[1].p2.y = 0.f;
+	Curves[1].p2.z = -.5f;
+
+	Curves[1].p3.x = 1.5f;
+	Curves[1].p3.y = 0.f;
+	Curves[1].p3.z = -.5f;
+
+	Curves[2].p0.x = -1.5f;
+	Curves[2].p0.y = 0.f;
+	Curves[2].p0.z = .5f;
+
+	Curves[2].p1.x = -.5f;
+	Curves[2].p1.y = 0.f;
+	Curves[2].p1.z = .5f;
+
+	Curves[2].p2.x = .5f;
+	Curves[2].p2.y = 0.f;
+	Curves[2].p2.z = .5f;
+
+	Curves[2].p3.x = 1.5f;
+	Curves[2].p3.y = 0.f;
+	Curves[2].p3.z = .5f;
+
+	Curves[3].p0.x = -1.5f;
+	Curves[3].p0.y = 0.f;
+	Curves[3].p0.z = 1.5f;
+
+	Curves[3].p1.x = -.5f;
+	Curves[3].p1.y = 0.f;
+	Curves[3].p1.z = 1.5f;
+
+	Curves[3].p2.x = .5f;
+	Curves[3].p2.y = 0.f;
+	Curves[3].p2.z = 1.5f;
+
+	Curves[3].p3.x = 1.5f;
+	Curves[3].p3.y = 0.f;
+	Curves[3].p3.z = 1.5f;
+}
+
+void BezierCurve(Point vertexList[NUMPOINTS], Curve curve)
+{
+	for (int it = 0; it < NUMPOINTS; it++)
+	{
+		float t = (float)it / (float)(NUMPOINTS - 1);
+		float omt = 1.f - t;
+		float x = omt * omt*omt*curve.p0.x + 3.f*t*omt*omt*curve.p1.x + 3.f*t*t*omt*curve.p2.x + t * t*t*curve.p3.x;
+		float y = omt * omt*omt*curve.p0.y + 3.f*t*omt*omt*curve.p1.y + 3.f*t*t*omt*curve.p2.y + t * t*t*curve.p3.y;
+		float z = omt * omt*omt*curve.p0.z + 3.f*t*omt*omt*curve.p1.z + 3.f*t*t*omt*curve.p2.z + t * t*t*curve.p3.z;
+		vertexList[it].x = x;
+		vertexList[it].y = y;
+		vertexList[it].z = z;
+	}
+}
+
+//Calculates surface normal for triangle
+Point SurfaceNormal(Point* p0, Point* p1, Point* p2)
+{
+	Point v1, v2, n;
+	v1.x = p1->x - p0->x; v2.x = p2->x - p0->x;
+	v1.y = p1->y - p0->y; v2.y = p2->y - p0->y;
+	v1.z = p1->z - p0->z; v2.z = p2->z - p0->z;
+
+
+	n.x = (v1.z * v2.y) - (v1.y * v2.z);
+	n.y = (v1.x * v2.z) - (v1.z * v2.x);
+	n.z = (v1.y * v2.x) - (v1.x * v2.y);
+
+	float mag = sqrt((n.x * n.x) + (n.y * n.y) + (n.z * n.z));
+
+	n.x /= mag;
+	n.y /= mag;
+	n.z /= mag;
+
+	return n;
+}
+
+//Lighting functions
+void
+SetShinyMaterial(float r, float g, float b, float shininess)
+{
+	glMaterialfv(GL_BACK, GL_EMISSION, Array3(0., 0., 0.));
+	glMaterialfv(GL_BACK, GL_AMBIENT, MulArray3(.4f, White));
+	glMaterialfv(GL_BACK, GL_DIFFUSE, MulArray3(1., White));
+	glMaterialfv(GL_BACK, GL_SPECULAR, Array3(0., 0., 0.));
+	glMaterialf(GL_BACK, GL_SHININESS, 2.f);
+	glMaterialfv(GL_FRONT, GL_EMISSION, Array3(0., 0., 0.));
+	glMaterialfv(GL_FRONT, GL_AMBIENT, Array3(r, g, b));
+	glMaterialfv(GL_FRONT, GL_DIFFUSE, Array3(r, g, b));
+	glMaterialfv(GL_FRONT, GL_SPECULAR, MulArray3(.8f, White));
+	glMaterialf(GL_FRONT, GL_SHININESS, shininess);
+}
+
+void
+SetDullMaterial(float r, float g, float b)
+{
+	glMaterialfv(GL_BACK, GL_EMISSION, Array3(0., 0., 0.));
+	glMaterialfv(GL_BACK, GL_AMBIENT, MulArray3(.4f, White));
+	glMaterialfv(GL_BACK, GL_DIFFUSE, MulArray3(1., White));
+	glMaterialfv(GL_BACK, GL_SPECULAR, Array3(0., 0., 0.));
+	glMaterialfv(GL_FRONT, GL_EMISSION, Array3(0., 0., 0.));
+	glMaterialfv(GL_FRONT, GL_AMBIENT, Array3(r, g, b));
+	glMaterialfv(GL_FRONT, GL_DIFFUSE, Array3(r, g, b));
+	glMaterialfv(GL_FRONT, GL_SPECULAR, Array3(0., 0., 0.));
+}
+
+void
+SetPointLight(int ilight, float x, float y, float z, float r, float g, float b)
+{
+	glLightfv(ilight, GL_POSITION, Array3(x, y, z));
+	glLightfv(ilight, GL_AMBIENT, Array3(0., 0., 0.));
+	glLightfv(ilight, GL_DIFFUSE, Array3(r, g, b));
+	glLightfv(ilight, GL_SPECULAR, Array3(r, g, b));
+	glLightf(ilight, GL_CONSTANT_ATTENUATION, 1.);
+	glLightf(ilight, GL_LINEAR_ATTENUATION, 0.);
+	glLightf(ilight, GL_QUADRATIC_ATTENUATION, 0.);
+}
+
+void
+SetSpotLight(int ilight, float x, float y, float z, float xdir, float ydir, float zdir, float r, float g, float b)
+{
+	glLightfv(ilight, GL_POSITION, Array3(x, y, z));
+	glLightfv(ilight, GL_SPOT_DIRECTION, Array3(xdir, ydir, zdir));
+	glLightf(ilight, GL_SPOT_EXPONENT, 1.);
+	glLightf(ilight, GL_SPOT_CUTOFF, 20.);
+	glLightfv(ilight, GL_AMBIENT, Array3(0., 0., 0.));
+	glLightfv(ilight, GL_DIFFUSE, Array3(r, g, b));
+	glLightfv(ilight, GL_SPECULAR, Array3(r, g, b));
+	glLightf(ilight, GL_CONSTANT_ATTENUATION, 1.);
+	glLightf(ilight, GL_LINEAR_ATTENUATION, 0.);
+	glLightf(ilight, GL_QUADRATIC_ATTENUATION, 0.);
 }
